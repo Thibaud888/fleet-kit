@@ -1,0 +1,93 @@
+# Workflow réutilisable : le dispatch par issues.
+# Issue labellisée `claude` (ou commentaire `@claude`) → session Claude dans Actions → PR.
+# Appelé par le stub templates/common/.github/workflows/claude.yml de chaque repo.
+#
+# SÉCURITÉ : seul github.actor == 'Thibaud888' déclenche — indispensable sur les repos
+# publics (une issue d'un inconnu ne doit JAMAIS lancer une session).
+name: Claude dispatch
+
+on:
+  workflow_call:
+    inputs:
+      default_model:
+        description: "Modèle par défaut pour les issues qui codent"
+        type: string
+        default: "claude-sonnet-5"
+      max_turns:
+        type: string
+        default: "40"
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: false
+      ANTHROPIC_API_KEY:
+        required: false
+
+concurrency:
+  group: claude-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  claude:
+    # Garde : auteur = Thibaud888, et l'événement est bien un ajout du label `claude`
+    # ou un commentaire contenant `@claude`.
+    if: >-
+      github.actor == 'Thibaud888' && (
+        (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'claude') ||
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude'))
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Choisir le modèle (label claude:haiku → Haiku)
+        id: model
+        run: |
+          if ${{ contains(github.event.issue.labels.*.name, 'claude:haiku') }}; then
+            echo "model=claude-haiku-4-5-20251001" >> "$GITHUB_OUTPUT"
+          else
+            echo "model=${{ inputs.default_model }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Cas 1 — label `claude` posé sur une issue : mode agent, prompt explicite.
+      - name: Session Claude (issue labellisée)
+        if: github.event_name == 'issues'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            Traite l'issue #${{ github.event.issue.number }} : « ${{ github.event.issue.title }} ».
+
+            Corps de l'issue (c'est le cahier des charges, avec sa definition of done) :
+            ---
+            ${{ github.event.issue.body }}
+            ---
+
+            Règles :
+            1. Lis MAP.md et CLAUDE.md d'abord ; n'explore que ce qu'ils ne couvrent pas.
+            2. Travaille sur une branche `claude/issue-${{ github.event.issue.number }}`.
+            3. Vérifie ton travail avant de conclure (script verify du repo s'il existe, sinon tests/build).
+            4. Pousse la branche et ouvre une PR en français avec `gh pr create`, corps contenant
+               `Closes #${{ github.event.issue.number }}`.
+            5. Commente l'issue avec le lien de la PR et un résumé de 3 lignes.
+            Si l'issue est ambiguë ou infaisable, ne code pas : commente l'issue en expliquant pourquoi.
+          claude_args: "--model ${{ steps.model.outputs.model }} --max-turns ${{ inputs.max_turns }} --allowedTools 'Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(pip:*),Bash(pytest:*),Edit,Write,Read,Glob,Grep'"
+
+      # Cas 2 — commentaire `@claude` (sur issue ou PR) : mode interactif standard de l'action.
+      - name: Session Claude (mention @claude)
+        if: github.event_name == 'issue_comment'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_args: "--model ${{ steps.model.outputs.model }} --max-turns ${{ inputs.max_turns }}"

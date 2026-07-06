@@ -1,0 +1,9 @@
+# Stub flotte : CI d'une lib/CLI — Node par défaut, remplacer par ci-python.yml si Python.
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  ci:
+    uses: Thibaud888/fleet-kit/.github/workflows/ci-node.yml@main

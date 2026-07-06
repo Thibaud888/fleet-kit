@@ -1,0 +1,17 @@
+# Stub flotte : self-healing des crons (logique dans fleet-kit/self-heal.yml).
+# /equiper remplace la liste `workflows:` par les noms réels des workflows planifiés du repo.
+name: Self-heal
+on:
+  workflow_run:
+    workflows: ["<NOM_DU_WORKFLOW_CRON>"]
+    types: [completed]
+jobs:
+  heal:
+    uses: Thibaud888/fleet-kit/.github/workflows/self-heal.yml@main
+    secrets: inherit
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      actions: read
+      id-token: write

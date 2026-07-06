@@ -1,0 +1,47 @@
+# Workflow réutilisable : build + déploiement GitHub Pages.
+# Par défaut : site statique publié tel quel (output_dir "."). Si build_command est fourni,
+# il est exécuté d'abord (avec Node + npm ci si package.json existe).
+name: Pages
+
+on:
+  workflow_call:
+    inputs:
+      build_command:
+        description: "Commande de build (vide = site statique publié tel quel)"
+        type: string
+        default: ""
+      output_dir:
+        description: "Dossier à publier"
+        type: string
+        default: "."
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        if: ${{ inputs.build_command != '' }}
+        with:
+          node-version: "20"
+      - name: Build
+        if: ${{ inputs.build_command != '' }}
+        run: |
+          if [ -f package.json ]; then npm ci; fi
+          ${{ inputs.build_command }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ inputs.output_dir }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,111 @@
+# Workflow réutilisable : self-healing des crons.
+# Un workflow (cron) échoue → issue avec les logs + notification ntfy + session Claude
+# de diagnostic/fix DANS LE MÊME RUN (une issue créée par GITHUB_TOKEN ne redéclenche
+# pas dispatch.yml — anti-récursion GitHub — donc Claude est lancé ici directement).
+# Appelé par le stub templates/common/.github/workflows/self-heal.yml (repos à crons).
+name: Self-heal
+
+on:
+  workflow_call:
+    inputs:
+      model:
+        type: string
+        default: "claude-sonnet-5"
+      max_turns:
+        type: string
+        default: "40"
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: false
+      ANTHROPIC_API_KEY:
+        required: false
+      NTFY_TOPIC:
+        required: false
+
+concurrency:
+  group: self-heal-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  heal:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Récupérer les logs en échec
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run view ${{ github.event.workflow_run.id }} --repo ${{ github.repository }} \
+            --log-failed 2>/dev/null | tail -c 6000 > /tmp/logs.txt \
+            || echo "(logs indisponibles)" > /tmp/logs.txt
+
+      - name: Ouvrir ou mettre à jour l'issue d'échec
+        id: issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Cron en échec : ${{ github.event.workflow_run.name }}"
+          num=$(gh issue list --repo ${{ github.repository }} --state open \
+            --search "in:title \"$title\"" --json number --jq '.[0].number' || true)
+          {
+            echo "Le workflow **${{ github.event.workflow_run.name }}** a échoué."
+            echo ""
+            echo "- Run : ${{ github.event.workflow_run.html_url }}"
+            echo "- Branche : \`${{ github.event.workflow_run.head_branch }}\`"
+            echo ""
+            echo "<details><summary>Derniers logs en échec</summary>"
+            echo ""
+            echo '```'
+            cat /tmp/logs.txt
+            echo '```'
+            echo "</details>"
+          } > /tmp/body.md
+          if [ -z "$num" ]; then
+            url=$(gh issue create --repo ${{ github.repository }} --title "$title" \
+              --body-file /tmp/body.md --label "self-heal")
+            num=$(basename "$url")
+          else
+            gh issue comment "$num" --repo ${{ github.repository }} --body-file /tmp/body.md
+          fi
+          echo "number=$num" >> "$GITHUB_OUTPUT"
+
+      - name: Notifier (ntfy)
+        continue-on-error: true
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          if [ -n "$NTFY_TOPIC" ]; then
+            curl -s -H "Title: Cron en échec — ${{ github.repository }}" -H "Priority: high" -H "Tags: rotating_light" \
+              -d "${{ github.event.workflow_run.name }} a échoué. Issue #${{ steps.issue.outputs.number }} ouverte, Claude est dessus." \
+              "https://ntfy.sh/$NTFY_TOPIC" > /dev/null
+          fi
+
+      - name: Session Claude — diagnostic et fix
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            Le workflow planifié « ${{ github.event.workflow_run.name }} » de ce repo a échoué
+            (run : ${{ github.event.workflow_run.html_url }}). L'issue de suivi est
+            #${{ steps.issue.outputs.number }}. Les derniers logs en échec sont dans /tmp/logs.txt : lis-les.
+
+            1. Diagnostique la cause (lis MAP.md/CLAUDE.md d'abord, puis le code du workflow et du script).
+            2. Si c'est un bug corrigeable dans le repo : corrige sur une branche
+               `claude/self-heal-${{ steps.issue.outputs.number }}`, vérifie, pousse, ouvre une PR
+               en français avec `gh pr create` (corps : `Closes #${{ steps.issue.outputs.number }}`).
+            3. Si la cause est EXTERNE (API tierce en panne, secret expiré, quota) : ne code pas,
+               commente l'issue avec le diagnostic et l'action manuelle à faire.
+            Dans les deux cas, termine par un commentaire de 3 lignes sur l'issue.
+          claude_args: "--model ${{ inputs.model }} --max-turns ${{ inputs.max_turns }} --allowedTools 'Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(gh run:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(pip:*),Bash(pytest:*),Bash(cat:*),Edit,Write,Read,Glob,Grep'"

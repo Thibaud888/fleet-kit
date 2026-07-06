@@ -1,0 +1,9 @@
+# Dependabot : actions à jour partout ; npm/pip ajoutés par /equiper selon le type.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"

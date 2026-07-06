@@ -1,0 +1,62 @@
+# Action composite : notification ntfy + ping Healthchecks.
+# Les deux sont optionnels et silencieux si non configurés — on peut donc l'appeler partout.
+#
+# Exemple (dans un cron) :
+#   - uses: Thibaud888/fleet-kit/actions/notify@main
+#     if: failure()
+#     with:
+#       topic: ${{ secrets.NTFY_TOPIC }}
+#       title: "Cron atlas-quiz"
+#       message: "Échec de la publication du short"
+#       priority: high
+#       healthcheck_url: ${{ secrets.HEALTHCHECK_URL_PUBLISH }}
+#       healthcheck_signal: fail
+name: notify
+description: "Notification ntfy + ping Healthchecks (silencieux si non configurés)"
+
+inputs:
+  topic:
+    description: "Topic ntfy (vide = pas de notification)"
+    default: ""
+  message:
+    description: "Corps de la notification"
+    default: ""
+  title:
+    description: "Titre de la notification"
+    default: ""
+  priority:
+    description: "min | low | default | high | urgent"
+    default: "default"
+  tags:
+    description: "Emojis ntfy, séparés par des virgules (ex: white_check_mark)"
+    default: ""
+  healthcheck_url:
+    description: "URL de ping Healthchecks.io (vide = pas de ping)"
+    default: ""
+  healthcheck_signal:
+    description: "success | fail | start"
+    default: "success"
+
+runs:
+  using: composite
+  steps:
+    - name: ntfy
+      if: ${{ inputs.topic != '' && inputs.message != '' }}
+      shell: bash
+      run: |
+        curl -s \
+          -H "Title: ${{ inputs.title }}" \
+          -H "Priority: ${{ inputs.priority }}" \
+          -H "Tags: ${{ inputs.tags }}" \
+          -d "${{ inputs.message }}" \
+          "https://ntfy.sh/${{ inputs.topic }}" > /dev/null || true
+    - name: Healthchecks
+      if: ${{ inputs.healthcheck_url != '' }}
+      shell: bash
+      run: |
+        suffix=""
+        case "${{ inputs.healthcheck_signal }}" in
+          fail) suffix="/fail" ;;
+          start) suffix="/start" ;;
+        esac
+        curl -s -m 10 --retry 3 "${{ inputs.healthcheck_url }}${suffix}" > /dev/null || true

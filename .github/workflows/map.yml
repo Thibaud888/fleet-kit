@@ -1,0 +1,71 @@
+# Workflow réutilisable : régénère MAP.md, la carte du repo lue par les sessions Claude
+# (élimine l'exploration répétée : la session lit ~2k tokens au lieu d'en brûler 30-80k).
+# Appelé par le stub templates/common/.github/workflows/map.yml de chaque repo.
+name: MAP — carte du repo
+
+on:
+  workflow_call:
+    inputs:
+      model:
+        description: "Modèle Claude (mécanique → Haiku)"
+        type: string
+        default: "claude-haiku-4-5-20251001"
+      max_turns:
+        type: string
+        default: "15"
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: false
+      ANTHROPIC_API_KEY:
+        required: false
+
+concurrency:
+  group: map-${{ github.repository }}
+  cancel-in-progress: true
+
+jobs:
+  map:
+    # push déclenché par le commit de MAP.md lui-même → déjà exclu par paths-ignore du stub,
+    # ceinture supplémentaire : [skip map] dans le message de commit.
+    if: ${{ !contains(github.event.head_commit.message || '', '[skip map]') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Régénérer MAP.md
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Régénère le fichier MAP.md à la racine de ce repo (crée-le s'il n'existe pas).
+            MAP.md est la carte que lira chaque future session Claude Code AVANT d'explorer :
+            optimise-la pour ça, en français, 150 lignes maximum.
+
+            Structure imposée :
+            1. **Quoi** — le projet en 2 phrases.
+            2. **Arborescence annotée** — dossiers/fichiers clés seulement, un commentaire par ligne.
+            3. **Points d'entrée** — par où commencer pour les modifications courantes
+               (« pour toucher X, va dans Y »).
+            4. **Flux de données** — comment l'info circule (5 lignes max).
+            5. **Commandes** — dev / test / build / deploy, exactes.
+            6. **Pièges connus** — ce qui surprend (conventions, hacks, dépendances fragiles).
+
+            Sois factuel et dense. Ne modifie AUCUN autre fichier que MAP.md.
+          claude_args: "--model ${{ inputs.model }} --max-turns ${{ inputs.max_turns }}"
+
+      - name: Commiter si la carte a changé
+        run: |
+          if [ -n "$(git status --porcelain MAP.md)" ]; then
+            git config user.name "fleet-kit-map[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add MAP.md
+            git commit -m "carte: régénère MAP.md [skip ci] [skip map]"
+            git push
+            echo "MAP.md mise à jour."
+          else
+            echo "MAP.md inchangée."
+          fi

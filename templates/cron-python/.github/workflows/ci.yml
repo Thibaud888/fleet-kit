@@ -1,0 +1,9 @@
+# Stub flotte : CI Python (logique dans fleet-kit/ci-python.yml).
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  ci:
+    uses: Thibaud888/fleet-kit/.github/workflows/ci-python.yml@main
