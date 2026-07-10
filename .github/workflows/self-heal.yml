@@ -3,6 +3,16 @@
 # de diagnostic/fix DANS LE MÊME RUN (une issue créée par GITHUB_TOKEN ne redéclenche
 # pas dispatch.yml — anti-récursion GitHub — donc Claude est lancé ici directement).
 # Appelé par le stub templates/common/.github/workflows/self-heal.yml (repos à crons).
+#
+# GARDE ANTI-RÉPÉTITION (2026-07-11) : chaque échec reçoit une « signature » (hash des logs
+# normalisés — timestamps, nombres, URLs neutralisés). Si l'issue ouverte porte déjà cette
+# signature, l'erreur est LA MÊME que celle déjà diagnostiquée → pas de nouvelle session
+# Claude (l'issue est commentée, ntfy prévient, 0 token). Une erreur différente au même
+# endroit produit une signature différente → nouvelle session de diagnostic/fix.
+# Réglable par repo via l'input `mode` du stub :
+#   - auto        (défaut) : garde par signature, décrite ci-dessus.
+#   - debug       : toujours lancer la session (cron en rodage, on veut du debug à chaque échec).
+#   - notify-only : jamais de session (cron stable/gelé, issue + ntfy suffisent).
 name: Self-heal
 
 on:
@@ -14,6 +24,10 @@ on:
       max_turns:
         type: string
         default: "40"
+      mode:
+        description: "auto (garde par signature) | debug (toujours) | notify-only (jamais)"
+        type: string
+        default: "auto"
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
         required: false
@@ -49,7 +63,23 @@ jobs:
             --log-failed 2>/dev/null | tail -c 6000 > /tmp/logs.txt \
             || echo "(logs indisponibles)" > /tmp/logs.txt
 
-      - name: Ouvrir ou mettre à jour l'issue d'échec
+      - name: Signature de l'erreur
+        id: sig
+        run: |
+          # Normalisation : on neutralise ce qui varie d'un run à l'autre sans changer la
+          # nature de l'erreur (dates, ids, compteurs, URLs, adresses hex) pour que « même
+          # erreur » ⇒ même hash, et « erreur différente au même endroit » ⇒ hash différent.
+          sig=$(tail -c 4000 /tmp/logs.txt \
+            | sed -E 's/[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9:.]+Z?//g' \
+            | sed -E 's~https?://[^[:space:]]+~~g' \
+            | sed -E 's/0x[0-9a-fA-F]+//g' \
+            | sed -E 's/[0-9]+//g' \
+            | tr -s '[:space:]' ' ' \
+            | sha256sum | cut -c1-16)
+          echo "sig=$sig" >> "$GITHUB_OUTPUT"
+          echo "Signature de l'échec : $sig"
+
+      - name: Ouvrir ou mettre à jour l'issue d'échec (et décider si Claude est relancé)
         id: issue
         env:
           GH_TOKEN: ${{ github.token }}
@@ -57,11 +87,42 @@ jobs:
           title="Cron en échec : ${{ github.event.workflow_run.name }}"
           num=$(gh issue list --repo ${{ github.repository }} --state open \
             --search "in:title \"$title\"" --json number --jq '.[0].number' || true)
+
+          # Dernière signature déjà enregistrée sur l'issue (body + commentaires), AVANT
+          # d'ajouter la nôtre — c'est elle qui dit si l'erreur a déjà été diagnostiquée.
+          last_sig=""
+          if [ -n "$num" ]; then
+            last_sig=$(gh issue view "$num" --repo ${{ github.repository }} \
+              --json body,comments --jq '([.body] + [.comments[].body]) | join("\n")' \
+              | grep -oE 'self-heal-sig:[0-9a-f]{16}' | tail -1 | cut -d: -f2 || true)
+          fi
+
+          # Décision
+          mode="${{ inputs.mode }}"
+          sig="${{ steps.sig.outputs.sig }}"
+          if [ "$mode" = "notify-only" ]; then
+            run_claude=false; motif="mode notify-only : pas de session Claude sur ce repo"
+          elif [ "$mode" = "debug" ]; then
+            run_claude=true; motif="mode debug : session à chaque échec"
+          elif [ -z "$num" ] || [ -z "$last_sig" ]; then
+            run_claude=true; motif="premier échec (pas de diagnostic antérieur)"
+          elif [ "$last_sig" = "$sig" ]; then
+            run_claude=false; motif="même erreur que le dernier diagnostic ($sig) — 0 token consommé"
+          else
+            run_claude=true; motif="erreur différente du dernier diagnostic ($last_sig → $sig)"
+          fi
+          echo "Décision self-heal : run_claude=$run_claude ($motif)"
+
           {
             echo "Le workflow **${{ github.event.workflow_run.name }}** a échoué."
             echo ""
             echo "- Run : ${{ github.event.workflow_run.html_url }}"
             echo "- Branche : \`${{ github.event.workflow_run.head_branch }}\`"
+            if [ "$run_claude" = "true" ]; then
+              echo "- Session Claude : **lancée** ($motif)"
+            else
+              echo "- Session Claude : **non relancée** ($motif)"
+            fi
             echo ""
             echo "<details><summary>Derniers logs en échec</summary>"
             echo ""
@@ -69,7 +130,10 @@ jobs:
             cat /tmp/logs.txt
             echo '```'
             echo "</details>"
+            echo ""
+            echo "<!-- self-heal-sig:$sig -->"
           } > /tmp/body.md
+
           if [ -z "$num" ]; then
             url=$(gh issue create --repo ${{ github.repository }} --title "$title" \
               --body-file /tmp/body.md --label "self-heal")
@@ -78,6 +142,8 @@ jobs:
             gh issue comment "$num" --repo ${{ github.repository }} --body-file /tmp/body.md
           fi
           echo "number=$num" >> "$GITHUB_OUTPUT"
+          echo "run_claude=$run_claude" >> "$GITHUB_OUTPUT"
+          echo "motif=$motif" >> "$GITHUB_OUTPUT"
 
       - name: Notifier (ntfy)
         continue-on-error: true
@@ -85,17 +151,25 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: |
           if [ -n "$NTFY_TOPIC" ]; then
-            curl -s -H "Title: Cron en échec — ${{ github.repository }}" -H "Priority: high" -H "Tags: rotating_light" \
-              -d "${{ github.event.workflow_run.name }} a échoué. Issue #${{ steps.issue.outputs.number }} ouverte, Claude est dessus." \
-              "https://ntfy.sh/$NTFY_TOPIC" > /dev/null
+            if [ "${{ steps.issue.outputs.run_claude }}" = "true" ]; then
+              curl -s -H "Title: Cron en échec — ${{ github.repository }}" -H "Priority: high" -H "Tags: rotating_light" \
+                -d "${{ github.event.workflow_run.name }} a échoué. Issue #${{ steps.issue.outputs.number }} ouverte, Claude est dessus." \
+                "https://ntfy.sh/$NTFY_TOPIC" > /dev/null
+            else
+              curl -s -H "Title: Cron toujours en échec — ${{ github.repository }}" -H "Priority: default" -H "Tags: repeat" \
+                -d "${{ github.event.workflow_run.name }} : ${{ steps.issue.outputs.motif }}. Voir issue #${{ steps.issue.outputs.number }}." \
+                "https://ntfy.sh/$NTFY_TOPIC" > /dev/null
+            fi
           fi
 
       # CLI direct (pas claude-code-action : elle refuse l'événement workflow_run —
       # même limite que `push`, constatée le 2026-07-10).
       - name: Installer Claude Code
+        if: steps.issue.outputs.run_claude == 'true'
         run: npm install -g @anthropic-ai/claude-code
 
       - name: Session Claude — diagnostic et fix
+        if: steps.issue.outputs.run_claude == 'true'
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -109,6 +183,8 @@ jobs:
           #${{ steps.issue.outputs.number }}. Les derniers logs en échec sont dans /tmp/logs.txt : lis-les.
 
           1. Diagnostique la cause (lis MAP.md/CLAUDE.md d'abord, puis le code du workflow et du script).
+             L'issue peut contenir des diagnostics antérieurs pour des erreurs différentes :
+             lis-les (gh issue view) avant de refaire un travail déjà fait.
           2. Si c'est un bug corrigeable dans le repo : corrige sur une branche
              `claude/self-heal-${{ steps.issue.outputs.number }}`, vérifie, pousse, ouvre une PR
              en français avec `gh pr create` (corps : `Closes #${{ steps.issue.outputs.number }}`).

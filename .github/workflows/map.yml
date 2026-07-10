@@ -2,6 +2,13 @@
 # (élimine l'exploration répétée : la session lit ~2k tokens au lieu d'en brûler 30-80k).
 # Appelé par le stub templates/common/.github/workflows/map.yml de chaque repo.
 #
+# GARDE ANTI-GASPILLAGE (2026-07-11) : la session Claude ne tourne que si le diff depuis la
+# dernière régénération le justifie — fichiers ajoutés/supprimés/renommés, fichiers « clés »
+# (package.json, workflows, scripts…) touchés, ou refonte massive (> 400 lignes). Sinon le
+# run se termine sans consommer un token. Quand elle tourne, la session reçoit le résumé du
+# diff pour mettre à jour la carte au lieu de ré-explorer tout le repo.
+# `workflow_dispatch` force toujours la régénération.
+#
 # NB : on invoque le CLI Claude Code directement (et PAS anthropics/claude-code-action) :
 # l'action refuse les événements `push` (« Unsupported event type: push »), le CLI est
 # indifférent à l'événement. Constaté le 2026-07-10 sur les 9 MAP post-merge.
@@ -17,6 +24,10 @@ on:
       max_turns:
         type: string
         default: "15"
+      seuil_lignes:
+        description: "Au-delà de ce total de lignes modifiées, on régénère même sans changement structurel"
+        type: string
+        default: "400"
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
         required: false
@@ -38,11 +49,54 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Garde — la carte doit-elle être régénérée ?
+        id: gate
+        run: |
+          decide() { echo "run=$1" >> "$GITHUB_OUTPUT"; echo "Garde MAP : $1 — $2"; }
+
+          if [ ! -f MAP.md ]; then decide true "MAP.md absente"; exit 0; fi
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            decide true "déclenchement manuel"; exit 0
+          fi
+
+          base=$(git log -1 --format=%H -- MAP.md || true)
+          if [ -z "$base" ]; then decide true "MAP.md jamais commitée"; exit 0; fi
+
+          # 1) Changements structurels : fichiers ajoutés / supprimés / renommés / copiés
+          structurel=$(git diff --name-status --diff-filter=ADRC "$base"..HEAD -- . ':!MAP.md' || true)
+          # 2) Fichiers « clés » qui pilotent les sections Commandes / Pièges de la carte
+          cles=$(git diff --name-only "$base"..HEAD -- \
+            package.json pyproject.toml requirements.txt requirements-dev.txt \
+            '.github/workflows' scripts 2>/dev/null | grep -v '^MAP.md$' || true)
+          # 3) Ampleur totale du diff (refonte sans création de fichier)
+          lignes=$(git diff --numstat "$base"..HEAD -- . ':!MAP.md' \
+            | awk '$1 != "-" {a += $1 + $2} END {print a + 0}')
+
+          # Résumé du diff pour le prompt (utilisé seulement si on régénère)
+          {
+            echo "Fichiers ajoutés (A) / supprimés (D) / renommés (R) depuis la dernière carte :"
+            if [ -n "$structurel" ]; then echo "$structurel" | head -80; else echo "(aucun)"; fi
+            echo ""
+            echo "Fichiers modifiés (ampleur) :"
+            git diff --stat "$base"..HEAD -- . ':!MAP.md' | tail -60
+          } > /tmp/diff-map.txt
+
+          if [ -n "$structurel" ]; then decide true "changement structurel de fichiers"; exit 0; fi
+          if [ -n "$cles" ]; then decide true "fichier clé modifié : $(echo "$cles" | head -5 | tr '\n' ' ')"; exit 0; fi
+          if [ "$lignes" -gt "${{ inputs.seuil_lignes }}" ]; then
+            decide true "diff massif ($lignes lignes > ${{ inputs.seuil_lignes }})"; exit 0
+          fi
+          decide false "diff mineur ($lignes lignes, ni structure ni fichier clé) — 0 token consommé"
 
       - name: Installer Claude Code
+        if: steps.gate.outputs.run == 'true'
         run: npm install -g @anthropic-ai/claude-code
 
       - name: Régénérer MAP.md
+        if: steps.gate.outputs.run == 'true'
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -64,12 +118,25 @@ jobs:
           Si la MAP.md existante est déjà exacte et à jour, ne la modifie pas.
           Sois factuel et dense. Ne modifie AUCUN autre fichier que MAP.md.
           FIN_PROMPT
+          if [ -f /tmp/diff-map.txt ] && [ -f MAP.md ]; then
+            {
+              echo ""
+              echo "## Ce qui a changé depuis la dernière régénération de la carte"
+              echo '```'
+              cat /tmp/diff-map.txt
+              echo '```'
+              echo "Pars de la MAP.md existante et mets à jour UNIQUEMENT les sections impactées"
+              echo "par ces changements. Ne ré-explore pas les zones non touchées que la carte"
+              echo "décrit déjà correctement."
+            } >> /tmp/prompt-map.md
+          fi
           claude -p "$(cat /tmp/prompt-map.md)" \
             --model "${{ inputs.model }}" \
             --max-turns "${{ inputs.max_turns }}" \
             --allowedTools "Read,Glob,Grep,Write"
 
       - name: Commiter si la carte a changé
+        if: steps.gate.outputs.run == 'true'
         run: |
           if [ -n "$(git status --porcelain MAP.md)" ]; then
             git config user.name "fleet-kit-map[bot]"
