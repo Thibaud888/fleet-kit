@@ -18,13 +18,23 @@ par `claude-ops/scripts/hygiene.ps1` (dérive de flotte).
 | Workflow | Rôle | Modèle par défaut |
 |---|---|---|
 | `map.yml` | Régénère `MAP.md` (carte du repo pour les sessions Claude) à chaque push sur main | Haiku |
-| `dispatch.yml` | Issue labellisée `claude` ou commentaire `@claude` → session Claude → PR | Sonnet (`claude:haiku` pour forcer Haiku) |
-| `self-heal.yml` | Cron en échec → issue avec logs + notification ntfy + session Claude de diagnostic/fix | Sonnet |
+| `dispatch.yml` | Issue labellisée `claude` ou commentaire `@claude` → session Claude → PR → **merge auto si CI verte** | Sonnet (`claude:haiku` pour forcer Haiku) |
+| `self-heal.yml` | Cron en échec → issue avec logs + notification ntfy + session Claude de diagnostic/fix → **merge auto si CI verte** | Sonnet |
 | `ci-node.yml` | CI standard Node (lint/test/build `--if-present`) | — |
 | `ci-python.yml` | CI standard Python (ruff/pytest si présents) | — |
 | `pages.yml` | Build + déploiement GitHub Pages | — |
 
 Action composite : [`actions/notify`](actions/notify/action.yml) — notification ntfy + ping Healthchecks.
+
+## Merge automatique des PR (depuis v1.1.0)
+
+`dispatch.yml` et `self-heal.yml` **mergent (squash) la PR dès que sa CI est verte** — plus
+d'attente de relecture humaine par défaut. Un repo sans CI configurée merge immédiatement
+(rien à attendre). Deux filets de sécurité, jamais de merge à l'aveugle :
+- **CI rouge** → la PR reste ouverte, commentée, pas de merge.
+- **Fichier `.claude/no-auto-merge`** (vide) à la racine du repo → désactive l'auto-merge sur
+  ce repo précis et force la relecture humaine ; à poser/retirer à la main à tout moment, ou au
+  choix à la création du repo (`/nouveau-projet`).
 
 ## Auth Claude dans Actions (secrets à poser par `/equiper`)
 

@@ -86,6 +86,36 @@ jobs:
             Si l'issue est ambiguë ou infaisable, ne code pas : commente l'issue en expliquant pourquoi.
           claude_args: "--model ${{ steps.model.outputs.model }} --max-turns ${{ inputs.max_turns }} --allowedTools 'Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(pip:*),Bash(pytest:*),Edit,Write,Read,Glob,Grep'"
 
+      # Merge auto : dès que la PR ouverte par Claude a une CI verte, on la merge (squash) —
+      # plus d'attente de relecture par défaut. Filet de sécurité gardé : CI rouge => PR laissée
+      # ouverte, jamais mergée à l'aveugle. Opt-out par repo : fichier `.claude/no-auto-merge`.
+      - name: Merge automatique si CI verte
+        if: github.event_name == 'issues'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          branch="claude/issue-${{ github.event.issue.number }}"
+          pr=$(gh pr list --repo ${{ github.repository }} --head "$branch" --state open --json number --jq '.[0].number')
+          if [ -z "$pr" ] || [ "$pr" = "null" ]; then
+            echo "Pas de PR ouverte sur $branch, rien à merger."
+            exit 0
+          fi
+          if [ -f .claude/no-auto-merge ]; then
+            gh pr comment "$pr" --repo ${{ github.repository }} \
+              --body "Auto-merge désactivé pour ce repo (\`.claude/no-auto-merge\`) — PR laissée pour relecture."
+            exit 0
+          fi
+          n_checks=$(gh pr checks "$pr" --repo ${{ github.repository }} --json name --jq 'length' 2>/dev/null || echo 0)
+          if [ "$n_checks" != "0" ]; then
+            if ! gh pr checks "$pr" --repo ${{ github.repository }} --watch --interval 15; then
+              gh pr comment "$pr" --repo ${{ github.repository }} \
+                --body "Checks CI en échec — PR laissée ouverte pour relecture (pas de merge automatique)."
+              exit 0
+            fi
+          fi
+          gh pr merge "$pr" --repo ${{ github.repository }} --squash --delete-branch
+
       # Cas 2 — commentaire `@claude` (sur issue ou PR) : mode interactif standard de l'action.
       - name: Session Claude (mention @claude)
         if: github.event_name == 'issue_comment'
