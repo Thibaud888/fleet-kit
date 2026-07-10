@@ -47,11 +47,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Choisir le modèle (label claude:haiku → Haiku)
+      - name: Choisir le modèle (labels claude:haiku / claude:opus / claude:fable)
         id: model
         run: |
           if ${{ contains(github.event.issue.labels.*.name, 'claude:haiku') }}; then
             echo "model=claude-haiku-4-5-20251001" >> "$GITHUB_OUTPUT"
+          elif ${{ contains(github.event.issue.labels.*.name, 'claude:opus') }}; then
+            echo "model=claude-opus-4-8" >> "$GITHUB_OUTPUT"
+          elif ${{ contains(github.event.issue.labels.*.name, 'claude:fable') }}; then
+            echo "model=claude-fable-5" >> "$GITHUB_OUTPUT"
           else
             echo "model=${{ inputs.default_model }}" >> "$GITHUB_OUTPUT"
           fi
