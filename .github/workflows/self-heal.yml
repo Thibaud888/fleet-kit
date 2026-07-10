@@ -90,22 +90,33 @@ jobs:
               "https://ntfy.sh/$NTFY_TOPIC" > /dev/null
           fi
 
-      - name: Session Claude — diagnostic et fix
-        uses: anthropics/claude-code-action@v1
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          prompt: |
-            Le workflow planifié « ${{ github.event.workflow_run.name }} » de ce repo a échoué
-            (run : ${{ github.event.workflow_run.html_url }}). L'issue de suivi est
-            #${{ steps.issue.outputs.number }}. Les derniers logs en échec sont dans /tmp/logs.txt : lis-les.
+      # CLI direct (pas claude-code-action : elle refuse l'événement workflow_run —
+      # même limite que `push`, constatée le 2026-07-10).
+      - name: Installer Claude Code
+        run: npm install -g @anthropic-ai/claude-code
 
-            1. Diagnostique la cause (lis MAP.md/CLAUDE.md d'abord, puis le code du workflow et du script).
-            2. Si c'est un bug corrigeable dans le repo : corrige sur une branche
-               `claude/self-heal-${{ steps.issue.outputs.number }}`, vérifie, pousse, ouvre une PR
-               en français avec `gh pr create` (corps : `Closes #${{ steps.issue.outputs.number }}`).
-            3. Si la cause est EXTERNE (API tierce en panne, secret expiré, quota) : ne code pas,
-               commente l'issue avec le diagnostic et l'action manuelle à faire.
-            Dans les deux cas, termine par un commentaire de 3 lignes sur l'issue.
-          claude_args: "--model ${{ inputs.model }} --max-turns ${{ inputs.max_turns }} --allowedTools 'Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(gh run:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(pip:*),Bash(pytest:*),Bash(cat:*),Edit,Write,Read,Glob,Grep'"
+      - name: Session Claude — diagnostic et fix
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "fleet-kit-self-heal[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cat > /tmp/prompt-heal.md << 'FIN_PROMPT'
+          Le workflow planifié « ${{ github.event.workflow_run.name }} » de ce repo a échoué
+          (run : ${{ github.event.workflow_run.html_url }}). L'issue de suivi est
+          #${{ steps.issue.outputs.number }}. Les derniers logs en échec sont dans /tmp/logs.txt : lis-les.
+
+          1. Diagnostique la cause (lis MAP.md/CLAUDE.md d'abord, puis le code du workflow et du script).
+          2. Si c'est un bug corrigeable dans le repo : corrige sur une branche
+             `claude/self-heal-${{ steps.issue.outputs.number }}`, vérifie, pousse, ouvre une PR
+             en français avec `gh pr create` (corps : `Closes #${{ steps.issue.outputs.number }}`).
+          3. Si la cause est EXTERNE (API tierce en panne, secret expiré, quota) : ne code pas,
+             commente l'issue avec le diagnostic et l'action manuelle à faire.
+          Dans les deux cas, termine par un commentaire de 3 lignes sur l'issue.
+          FIN_PROMPT
+          claude -p "$(cat /tmp/prompt-heal.md)" \
+            --model "${{ inputs.model }}" \
+            --max-turns "${{ inputs.max_turns }}" \
+            --allowedTools "Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(gh run:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(pip:*),Bash(pytest:*),Bash(cat:*),Edit,Write,Read,Glob,Grep"

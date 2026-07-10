@@ -1,6 +1,10 @@
 # Workflow réutilisable : régénère MAP.md, la carte du repo lue par les sessions Claude
 # (élimine l'exploration répétée : la session lit ~2k tokens au lieu d'en brûler 30-80k).
 # Appelé par le stub templates/common/.github/workflows/map.yml de chaque repo.
+#
+# NB : on invoque le CLI Claude Code directement (et PAS anthropics/claude-code-action) :
+# l'action refuse les événements `push` (« Unsupported event type: push »), le CLI est
+# indifférent à l'événement. Constaté le 2026-07-10 sur les 9 MAP post-merge.
 name: MAP — carte du repo
 
 on:
@@ -35,27 +39,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Installer Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
       - name: Régénérer MAP.md
-        uses: anthropics/claude-code-action@v1
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: |
-            Régénère le fichier MAP.md à la racine de ce repo (crée-le s'il n'existe pas).
-            MAP.md est la carte que lira chaque future session Claude Code AVANT d'explorer :
-            optimise-la pour ça, en français, 150 lignes maximum.
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cat > /tmp/prompt-map.md << 'FIN_PROMPT'
+          Régénère le fichier MAP.md à la racine de ce repo (crée-le s'il n'existe pas).
+          MAP.md est la carte que lira chaque future session Claude Code AVANT d'explorer :
+          optimise-la pour ça, en français, 150 lignes maximum.
 
-            Structure imposée :
-            1. **Quoi** — le projet en 2 phrases.
-            2. **Arborescence annotée** — dossiers/fichiers clés seulement, un commentaire par ligne.
-            3. **Points d'entrée** — par où commencer pour les modifications courantes
-               (« pour toucher X, va dans Y »).
-            4. **Flux de données** — comment l'info circule (5 lignes max).
-            5. **Commandes** — dev / test / build / deploy, exactes.
-            6. **Pièges connus** — ce qui surprend (conventions, hacks, dépendances fragiles).
+          Structure imposée :
+          1. **Quoi** — le projet en 2 phrases.
+          2. **Arborescence annotée** — dossiers/fichiers clés seulement, un commentaire par ligne.
+          3. **Points d'entrée** — par où commencer pour les modifications courantes
+             (« pour toucher X, va dans Y »).
+          4. **Flux de données** — comment l'info circule (5 lignes max).
+          5. **Commandes** — dev / test / build / deploy, exactes.
+          6. **Pièges connus** — ce qui surprend (conventions, hacks, dépendances fragiles).
 
-            Sois factuel et dense. Ne modifie AUCUN autre fichier que MAP.md.
-          claude_args: "--model ${{ inputs.model }} --max-turns ${{ inputs.max_turns }}"
+          Si la MAP.md existante est déjà exacte et à jour, ne la modifie pas.
+          Sois factuel et dense. Ne modifie AUCUN autre fichier que MAP.md.
+          FIN_PROMPT
+          claude -p "$(cat /tmp/prompt-map.md)" \
+            --model "${{ inputs.model }}" \
+            --max-turns "${{ inputs.max_turns }}" \
+            --allowedTools "Read,Glob,Grep,Write"
 
       - name: Commiter si la carte a changé
         run: |
