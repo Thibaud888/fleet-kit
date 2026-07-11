@@ -23,7 +23,9 @@ on:
         default: "claude-haiku-4-5-20251001"
       max_turns:
         type: string
-        default: "15"
+        # 10 suffit depuis la garde diff : la session reçoit le résumé des changements et
+        # met à jour les sections impactées au lieu d'explorer tout le repo.
+        default: "10"
       seuil_lignes:
         description: "Au-delà de ce total de lignes modifiées, on régénère même sans changement structurel"
         type: string
