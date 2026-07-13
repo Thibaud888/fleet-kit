@@ -120,6 +120,10 @@ jobs:
               exit 0
             fi
           fi
+          # Un draft ne peut pas être mergé (GitHub renvoie 405). Si la PR est restée en
+          # brouillon (p.ex. ouverte par une session web), on la passe « ready » avant merge —
+          # sans quoi le merge auto échouerait en silence (continue-on-error).
+          gh pr ready "$pr" --repo ${{ github.repository }} 2>/dev/null || true
           gh pr merge "$pr" --repo ${{ github.repository }} --squash --delete-branch
 
       # Cas 2 — commentaire `@claude` (sur issue ou PR) : mode interactif standard de l'action.
