@@ -100,8 +100,8 @@ jobs:
       - name: Régénérer MAP.md
         if: steps.gate.outputs.run == 'true'
         env:
+          # Abonnement (OAuth) uniquement : pas d'ANTHROPIC_API_KEY → jamais de crédits API.
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           cat > /tmp/prompt-map.md << 'FIN_PROMPT'
           Régénère le fichier MAP.md à la racine de ce repo (crée-le s'il n'existe pas).
