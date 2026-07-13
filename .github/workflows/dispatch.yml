@@ -15,7 +15,11 @@ on:
         default: "claude-sonnet-5"
       max_turns:
         type: string
-        default: "40"
+        # 80 : marge pour les demandes conséquentes (explorer + implémenter sur plusieurs
+        # fichiers + vérifier + ouvrir la PR en une seule session). 40 était trop court et
+        # coupait des sessions en plein travail (« reached maximum number of turns »).
+        # Au-delà de ~80-100, mieux vaut découper la demande que grossir le plafond.
+        default: "80"
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
         required: false
