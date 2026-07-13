@@ -132,4 +132,16 @@ jobs:
           # La transmettre ferait facturer les sessions en crédits API sur les repos qui
           # définissent ce secret pour leur propre app (ex. recherche-emploi). On n'y touche pas.
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          claude_args: "--model ${{ steps.model.outputs.model }} --max-turns ${{ inputs.max_turns }}"
+          # Mêmes outils que le Cas 1 : sans `--allowedTools`, la session déclenchée par
+          # commentaire n'a ni `gh` ni `python` (le `.claude/settings.json` du repo n'est pas
+          # honoré ici, seuls les `--allowedTools` de `claude_args` font foi). Elle ne peut donc
+          # ni ouvrir la PR ni lancer la vérification, et retombe sur un simple lien « Create PR ».
+          # C'est ce qui bloquait les cadrages « GO » et le bouton « Demander des changements » de
+          # FleetView. On rétablit l'outillage et on rappelle à Claude d'ouvrir lui-même la PR
+          # quand il a implémenté sur une branche (il ne peut pas merger : limite volontaire de
+          # l'action — la PR reste ouverte pour relecture humaine).
+          claude_args: >-
+            --model ${{ steps.model.outputs.model }}
+            --max-turns ${{ inputs.max_turns }}
+            --allowedTools 'Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(pip:*),Bash(pytest:*),Edit,Write,Read,Glob,Grep'
+            --append-system-prompt 'Quand tu as implémenté des changements sur une branche sans pull request associée, ouvre la PR toi-même avec gh pr create (titre et corps en français, avec Closes #<n> quand une issue est liée), puis commente le fil avec le lien. Tu ne peux pas merger ni rebaser (limitation volontaire) : laisse la PR ouverte pour relecture.'
