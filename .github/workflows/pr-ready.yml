@@ -1,0 +1,32 @@
+# Workflow réutilisable : sort automatiquement du brouillon (draft) les PR ouvertes sur une
+# branche `claude/*`.
+#
+# POURQUOI : les sessions Claude Code web / FleetView ouvrent leurs PR *en draft* par consigne
+# du harnais (non désactivable depuis un repo). Or une PR draft ne peut pas être mergée — le
+# bouton « Merger » renvoie GitHub 405. Les sessions de la flotte (`@claude`/label via
+# `gh pr create`) créent déjà des PR prêtes ; ce workflow rattrape uniquement les drafts venus
+# d'ailleurs, pour que le bouton « Merger » fonctionne toujours du premier coup.
+#
+# SÉCURITÉ : seul `github.actor == 'Thibaud888'` et les branches `claude/*` sont concernés —
+# une PR draft d'un tiers (repo public) n'est jamais dé-brouillonnée automatiquement.
+name: PR ready
+
+on:
+  pull_request:
+    types: [opened, reopened]
+  workflow_call:
+
+jobs:
+  ready:
+    if: >-
+      github.actor == 'Thibaud888'
+      && github.event.pull_request.draft == true
+      && startsWith(github.event.pull_request.head.ref, 'claude/')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Sortir la PR du brouillon
+        run: gh pr ready ${{ github.event.pull_request.number }} --repo ${{ github.repository }}

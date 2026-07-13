@@ -19,6 +19,7 @@ par `claude-ops/scripts/hygiene.ps1` (dérive de flotte).
 |---|---|---|
 | `map.yml` | Régénère `MAP.md` (carte du repo pour les sessions Claude) à chaque push sur main | Haiku |
 | `dispatch.yml` | Issue labellisée `claude` ou commentaire `@claude` → session Claude → PR → **merge auto si CI verte** | Sonnet (`claude:haiku` pour forcer Haiku) |
+| `pr-ready.yml` | Sort du brouillon (draft) les PR `claude/*` à l'ouverture → mergeables direct | — |
 | `self-heal.yml` | Cron en échec → issue avec logs + notification ntfy + session Claude de diagnostic/fix → **merge auto si CI verte** | Sonnet |
 | `ci-node.yml` | CI standard Node (lint/test/build `--if-present`) | — |
 | `ci-python.yml` | CI standard Python (ruff/pytest si présents) | — |
@@ -35,6 +36,12 @@ d'attente de relecture humaine par défaut. Un repo sans CI configurée merge im
 - **Fichier `.claude/no-auto-merge`** (vide) à la racine du repo → désactive l'auto-merge sur
   ce repo précis et force la relecture humaine ; à poser/retirer à la main à tout moment, ou au
   choix à la création du repo (`/nouveau-projet`).
+
+Note sur les **PR en brouillon (draft)** : une PR draft ne peut pas être mergée (GitHub renvoie
+405 sur le bouton « Merger »). Les sessions flotte (`@claude`/label) créent des PR **prêtes** ;
+les sessions Claude Code web / FleetView les ouvrent en **draft** par consigne du harnais.
+`pr-ready.yml` les sort automatiquement du brouillon à l'ouverture (branches `claude/*`), et les
+étapes d'auto-merge appellent `gh pr ready` avant `gh pr merge` par sécurité.
 
 ## Auth Claude dans Actions (secrets à poser par `/equiper`)
 
@@ -55,7 +62,7 @@ Autres secrets : `NTFY_TOPIC` (notifications), `HEALTHCHECK_URL_<CRON>` (pings).
 ## Templates (`templates/`)
 
 - `common/` : CLAUDE.md (modèle), BACKLOG.md, `.claude/settings.json` (allowlist), dependabot,
-  stubs `map.yml` / `claude.yml` / `self-heal.yml`.
+  stubs `map.yml` / `claude.yml` / `self-heal.yml` / `pr-ready.yml`.
 - `static/` (GitHub Pages), `service-node/` (Render/serveur), `cron-python/` (script planifié), `lib/`.
 
 Installés/rafraîchis par la skill **`/equiper <repo>`** (sans écraser l'existant) ; les nouveaux
