@@ -90,7 +90,7 @@ jobs:
                `Closes #${{ github.event.issue.number }}`.
             5. Commente l'issue avec le lien de la PR et un résumé de 3 lignes.
             Si l'issue est ambiguë ou infaisable, ne code pas : commente l'issue en expliquant pourquoi.
-          claude_args: "--model ${{ steps.model.outputs.model }} --max-turns ${{ inputs.max_turns }} --allowedTools 'Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(pip:*),Bash(pytest:*),Edit,Write,Read,Glob,Grep'"
+          claude_args: "--model ${{ steps.model.outputs.model }} --max-turns ${{ inputs.max_turns }} --allowedTools 'Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(python3:*),Bash(pip:*),Bash(pip3:*),Bash(pytest:*),Edit,Write,Read,Glob,Grep'"
 
       # Merge auto : dès que la PR ouverte par Claude a une CI verte, on la merge (squash) —
       # plus d'attente de relecture par défaut. Filet de sécurité gardé : CI rouge => PR laissée
@@ -120,6 +120,10 @@ jobs:
               exit 0
             fi
           fi
+          # Un draft ne peut pas être mergé (GitHub renvoie 405). Si la PR est restée en
+          # brouillon (p.ex. ouverte par une session web), on la passe « ready » avant merge —
+          # sans quoi le merge auto échouerait en silence (continue-on-error).
+          gh pr ready "$pr" --repo ${{ github.repository }} 2>/dev/null || true
           gh pr merge "$pr" --repo ${{ github.repository }} --squash --delete-branch
 
       # Cas 2 — commentaire `@claude` (sur issue ou PR) : mode interactif standard de l'action.
@@ -140,8 +144,11 @@ jobs:
           # FleetView. On rétablit l'outillage et on rappelle à Claude d'ouvrir lui-même la PR
           # quand il a implémenté sur une branche (il ne peut pas merger : limite volontaire de
           # l'action — la PR reste ouverte pour relecture humaine).
+          # NB : on liste `python` ET `python3` (idem `pip`/`pip3`) — un motif `Bash(python:*)`
+          # NE couvre PAS `python3 …`, et Claude tape souvent `python3 scripts/verify.py`, ce qui
+          # retombait sinon sur « This command requires approval » (headless = blocage définitif).
           claude_args: >-
             --model ${{ steps.model.outputs.model }}
             --max-turns ${{ inputs.max_turns }}
-            --allowedTools 'Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(pip:*),Bash(pytest:*),Edit,Write,Read,Glob,Grep'
+            --allowedTools 'Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(python3:*),Bash(pip:*),Bash(pip3:*),Bash(pytest:*),Edit,Write,Read,Glob,Grep'
             --append-system-prompt 'Quand tu as implémenté des changements sur une branche sans pull request associée, ouvre la PR toi-même avec gh pr create (titre et corps en français, avec Closes #<n> quand une issue est liée), puis commente le fil avec le lien. Tu ne peux pas merger ni rebaser (limitation volontaire) : laisse la PR ouverte pour relecture.'
