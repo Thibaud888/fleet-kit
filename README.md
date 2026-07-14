@@ -18,7 +18,7 @@ par `claude-ops/scripts/hygiene.ps1` (dérive de flotte).
 | Workflow | Rôle | Modèle par défaut |
 |---|---|---|
 | `map.yml` | Régénère `MAP.md` (carte du repo pour les sessions Claude) à chaque push sur main | Haiku |
-| `dispatch.yml` | Issue labellisée `claude` ou commentaire `@claude` → session Claude → PR → **merge auto si CI verte** | Sonnet (`claude:haiku` pour forcer Haiku) |
+| `dispatch.yml` | Issue labellisée `claude` ou commentaire `@claude` → session Claude → PR → **merge auto si CI verte** | Sonnet ; labels `claude:haiku` / `claude:opus` / `claude:fable` pour forcer un autre modèle |
 | `pr-ready.yml` | Sort du brouillon (draft) les PR `claude/*` à l'ouverture → mergeables direct | — |
 | `self-heal.yml` | Cron en échec → issue avec logs + notification ntfy + session Claude de diagnostic/fix → **merge auto si CI verte** | Sonnet |
 | `ci-node.yml` | CI standard Node (lint/test/build `--if-present`) | — |
@@ -73,5 +73,6 @@ projets passent par **`/nouveau-projet`** qui appelle `/equiper`.
 `VERSION` suit semver. Bump **mineur** = nouveaux templates/workflows (dérive signalée, upgrade
 via `/equiper`), bump **majeur** = changement cassant des stubs (les repos doivent être ré-équipés).
 
-> Statut : v1.0.0 posée par le chantier D1 (2026-07-04). `dispatch.yml` et `self-heal.yml`
-> seront validés en conditions réelles par les chantiers D4/D5 (repo de test `test-fleet`).
+> Statut : **v1.1.0** — merge auto des PR (`dispatch.yml`/`self-heal.yml`) ajouté le 2026-07-11,
+> par-dessus le kit initial du chantier D1 (2026-07-04). `dispatch.yml`/`self-heal.yml` sont
+> éprouvés en conditions réelles par les chantiers D4/D5.
