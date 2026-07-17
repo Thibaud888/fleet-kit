@@ -138,6 +138,12 @@ jobs:
           # sans quoi le merge auto échouerait en silence (continue-on-error).
           gh pr ready "$pr" --repo ${{ github.repository }} 2>/dev/null || true
           gh pr merge "$pr" --repo ${{ github.repository }} --squash --delete-branch
+          # Mergée sous github.token, la PR ne déclenche pas le « Closes #N » de son corps
+          # (garde anti-cascade GitHub) : l'issue resterait ouverte — session fantôme pour
+          # l'anti-collision de /dispatch et /backlog, kanban jamais « Mergé ». Fermeture
+          # explicite, uniquement dans ce chemin (un merge raté a déjà fait échouer l'étape).
+          gh issue close "${{ github.event.issue.number }}" --repo ${{ github.repository }} \
+            --comment "PR #$pr mergée automatiquement (CI verte) — issue fermée par le run (le \`Closes\` du corps de PR est ignoré sous \`github.token\`)."
 
       # Contrôle de sortie — SANS continue-on-error : c'est le seul garde-fou qui peut
       # rendre le job rouge. Une session qui ne produit NI PR NI explication est un échec
