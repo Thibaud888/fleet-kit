@@ -63,8 +63,8 @@ Autres secrets : `NTFY_TOPIC` (notifications), `HEALTHCHECK_URL_<CRON>` (pings).
 
 - `common/` : CLAUDE.md (modèle), BACKLOG.md, `.claude/settings.json` (allowlist), dependabot,
   stubs `map.yml` / `claude.yml` / `self-heal.yml` / `pr-ready.yml`, et les skills de session
-  `.claude/skills/` (`/bilan`, `/handoff`, `/reprends`) — versionnées avec le repo, donc
-  disponibles y compris en **session Cloud** (téléphone / autre PC).
+  `.claude/skills/` (`/backlog` mono-repo, `/bilan`, `/handoff`, `/reprends`) — versionnées
+  avec le repo, donc disponibles y compris en **session Cloud** (téléphone / autre PC).
 - `static/` (GitHub Pages), `service-node/` (Render/serveur), `cron-python/` (script planifié), `lib/`.
 
 Installés/rafraîchis par la skill **`/equiper <repo>`** (sans écraser l'existant) ; les nouveaux
@@ -75,8 +75,10 @@ projets passent par **`/nouveau-projet`** qui appelle `/equiper`.
 `VERSION` suit semver. Bump **mineur** = nouveaux templates/workflows (dérive signalée, upgrade
 via `/equiper`), bump **majeur** = changement cassant des stubs (les repos doivent être ré-équipés).
 
-> Statut : **v1.2.0** — skills de session `.claude/skills/` (`/bilan`, `/handoff`, `/reprends`)
-> ajoutées à `templates/common/` le 2026-07-15 : chaque repo équipé les embarque, donc elles
-> sont disponibles en session Cloud (bump mineur → upgrade via `/equiper`).
+> Statut : **v1.3.0** — skill **`/backlog` mono-repo** ajoutée à `templates/common/.claude/skills/`
+> le 2026-07-17 : consulter/traiter/gérer le `BACKLOG.md` du repo courant depuis une session
+> Cloud (la vue flotte multi-repo reste la skill de claude-ops, qui prime en session locale).
+> v1.2.0 (2026-07-15) : skills de session `/bilan`, `/handoff`, `/reprends` dans
+> `templates/common/` — chaque repo équipé les embarque, donc disponibles en session Cloud.
 > v1.1.0 (2026-07-11) : merge auto des PR (`dispatch.yml`/`self-heal.yml`), par-dessus le kit
 > initial du chantier D1 (2026-07-04).
