@@ -64,6 +64,13 @@ jobs:
             echo "model=${{ inputs.default_model }}" >> "$GITHUB_OUTPUT"
           fi
 
+      # Repère temporel : sert au contrôle de sortie à distinguer ce que CETTE session a
+      # écrit sur l'issue d'un commentaire laissé par un run précédent.
+      - name: Horodatage de départ
+        id: t0
+        if: github.event_name == 'issues'
+        run: echo "ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
       # Cas 1 — label `claude` posé sur une issue : mode agent, prompt explicite.
       - name: Session Claude (issue labellisée)
         if: github.event_name == 'issues'
@@ -125,6 +132,40 @@ jobs:
           # sans quoi le merge auto échouerait en silence (continue-on-error).
           gh pr ready "$pr" --repo ${{ github.repository }} 2>/dev/null || true
           gh pr merge "$pr" --repo ${{ github.repository }} --squash --delete-branch
+
+      # Contrôle de sortie — SANS continue-on-error : c'est le seul garde-fou qui peut
+      # rendre le job rouge. Une session qui ne produit NI PR NI explication est un échec
+      # silencieux : le run sort vert (l'étape de merge ci-dessus fait `exit 0` sur
+      # « rien à merger »), l'item paraît traité, et personne ne le voit sans contrôle
+      # manuel. Vécu 2× le 2026-07-17 sur activites-vallauriennes (#15 et #16) : branche
+      # poussée, aucune PR, run vert, `is_error: false`.
+      # Un refus motivé reste un SUCCÈS : le prompt demande explicitement de commenter
+      # l'issue plutôt que de coder quand elle est ambiguë ou infaisable.
+      - name: Contrôle — la session a-t-elle abouti ?
+        if: github.event_name == 'issues'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          issue="${{ github.event.issue.number }}"
+          branch="claude/issue-$issue"
+          # --state all : après un merge auto, la PR est mergée et la branche supprimée.
+          pr=$(gh pr list --repo ${{ github.repository }} --head "$branch" --state all \
+                 --json number --jq '.[0].number // empty')
+          if [ -n "$pr" ]; then
+            echo "PR #$pr produite sur $branch."
+            exit 0
+          fi
+          # Pas de PR : acceptable uniquement si la session a dit pourquoi, pendant CE run.
+          n=$(gh api "repos/${{ github.repository }}/issues/$issue/comments" \
+                --jq '[.[] | select(.user.login == "github-actions[bot]")
+                          | select(.created_at >= "${{ steps.t0.outputs.ts }}")] | length')
+          if [ "${n:-0}" -gt 0 ]; then
+            echo "::warning::Aucune PR produite, mais la session a motivé son refus sur l'issue #$issue."
+            exit 0
+          fi
+          echo "::error::Échec silencieux : session terminée sans PR et sans explication sur l'issue #$issue."
+          echo "Vérifier la branche $branch (poussée sans PR ?) et les logs de la session ci-dessus."
+          exit 1
 
       # Cas 2 — commentaire `@claude` (sur issue ou PR) : mode interactif standard de l'action.
       - name: Session Claude (mention @claude)
