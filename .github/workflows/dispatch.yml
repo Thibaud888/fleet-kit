@@ -90,6 +90,12 @@ jobs:
             ---
 
             Règles :
+            0. AVANT tout : vérifie que la definition of done est atteignable avec tes seuls
+               outils autorisés — tu n'as PAS d'accès web (aucun scraping, aucune sonde de
+               site, aucune API externe), et tu ne peux ni lancer ni attendre un autre
+               workflow (`gh workflow run` / `gh run` te sont interdits). Si la DoD exige
+               l'un d'eux, ne code pas, ne pousse AUCUNE branche : commente l'issue en
+               expliquant le blocage, et arrête-toi là.
             1. Lis MAP.md et CLAUDE.md d'abord ; n'explore que ce qu'ils ne couvrent pas.
             2. Travaille sur une branche `claude/issue-${{ github.event.issue.number }}`.
             3. Vérifie ton travail avant de conclure (script verify du repo s'il existe, sinon tests/build).
