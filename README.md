@@ -30,9 +30,11 @@ Action composite : [`actions/notify`](actions/notify/action.yml) — notificatio
 ## Merge automatique des PR (depuis v1.1.0)
 
 `dispatch.yml` et `self-heal.yml` **mergent (squash) la PR dès que sa CI est verte** — plus
-d'attente de relecture humaine par défaut. Un repo sans CI configurée merge immédiatement
-(rien à attendre). Deux filets de sécurité, jamais de merge à l'aveugle :
+d'attente de relecture humaine par défaut. Trois filets de sécurité, jamais de merge à l'aveugle :
 - **CI rouge** → la PR reste ouverte, commentée, pas de merge.
+- **Repo sans CI** (depuis v1.4.0) → le merge auto exige une section `## Vérification`
+  (commande + résultat) dans le corps de la PR ; sans elle, la PR attend (avant, « sans CI »
+  mergait immédiatement, c'est-à-dire à l'aveugle).
 - **Fichier `.claude/no-auto-merge`** (vide) à la racine du repo → désactive l'auto-merge sur
   ce repo précis et force la relecture humaine ; à poser/retirer à la main à tout moment, ou au
   choix à la création du repo (`/nouveau-projet`).
@@ -75,7 +77,12 @@ projets passent par **`/nouveau-projet`** qui appelle `/equiper`.
 `VERSION` suit semver. Bump **mineur** = nouveaux templates/workflows (dérive signalée, upgrade
 via `/equiper`), bump **majeur** = changement cassant des stubs (les repos doivent être ré-équipés).
 
-> Statut : **v1.3.0** — skill **`/backlog` mono-repo** ajoutée à `templates/common/.claude/skills/`
+> Statut : **v1.4.0** (2026-07-19) — merge auto durci : un repo **sans CI** n'auto-merge plus
+> à l'aveugle, la PR doit porter une section `## Vérification` (dispatch.yml + self-heal.yml,
+> effet immédiat sur toute la flotte via `@main` ; templates : CLAUDE.md.tpl, /bilan, /handoff
+> — propagés au prochain `/equiper`). Décisions issues de l'audit des consignes
+> (`claude-ops/rapport/challenge-consignes-2026-07-19.md`).
+> v1.3.0 — skill **`/backlog` mono-repo** ajoutée à `templates/common/.claude/skills/`
 > le 2026-07-17 : consulter/traiter/gérer le `BACKLOG.md` du repo courant depuis une session
 > Cloud (la vue flotte multi-repo reste la skill de claude-ops, qui prime en session locale).
 > v1.2.0 (2026-07-15) : skills de session `/bilan`, `/handoff`, `/reprends` dans

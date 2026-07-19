@@ -100,7 +100,9 @@ jobs:
             2. Travaille sur une branche `claude/issue-${{ github.event.issue.number }}`.
             3. Vérifie ton travail avant de conclure (script verify du repo s'il existe, sinon tests/build).
             4. Pousse la branche et ouvre une PR en français avec `gh pr create`, corps contenant
-               `Closes #${{ github.event.issue.number }}`.
+               `Closes #${{ github.event.issue.number }}` ET une section `## Vérification`
+               (la commande de vérification lancée + ses dernières lignes de sortie). Sans CI
+               sur le repo, cette section est la SEULE preuve — sans elle, pas de merge auto.
             5. Commente l'issue avec le lien de la PR et un résumé de 3 lignes.
             Si l'issue est ambiguë ou infaisable, ne code pas : commente l'issue en expliquant pourquoi.
           claude_args: "--model ${{ steps.model.outputs.model }} --max-turns ${{ inputs.max_turns }} --allowedTools 'Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(python3:*),Bash(pip:*),Bash(pip3:*),Bash(pytest:*),Edit,Write,Read,Glob,Grep'"
@@ -130,6 +132,15 @@ jobs:
             if ! gh pr checks "$pr" --repo ${{ github.repository }} --watch --interval 15; then
               gh pr comment "$pr" --repo ${{ github.repository }} \
                 --body "Checks CI en échec — PR laissée ouverte pour relecture (pas de merge automatique)."
+              exit 0
+            fi
+          else
+            # Pas de CI sur ce repo : « merge immédiat » voulait dire « à l'aveugle ».
+            # Depuis v1.4.0, on exige la preuve de vérification dans le corps de la PR
+            # (section `## Vérification` : commande + sortie, demandée par le prompt).
+            if ! gh pr view "$pr" --repo ${{ github.repository }} --json body --jq .body | grep -q "## Vérification"; then
+              gh pr comment "$pr" --repo ${{ github.repository }} \
+                --body "Pas de CI sur ce repo et pas de section \`## Vérification\` dans le corps de la PR — merge auto suspendu, relecture (ou ajout de la preuve) nécessaire."
               exit 0
             fi
           fi

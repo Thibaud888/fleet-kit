@@ -187,7 +187,9 @@ jobs:
              lis-les (gh issue view) avant de refaire un travail déjà fait.
           2. Si c'est un bug corrigeable dans le repo : corrige sur une branche
              `claude/self-heal-${{ steps.issue.outputs.number }}`, vérifie, pousse, ouvre une PR
-             en français avec `gh pr create` (corps : `Closes #${{ steps.issue.outputs.number }}`).
+             en français avec `gh pr create` (corps : `Closes #${{ steps.issue.outputs.number }}`
+             + une section `## Vérification` avec la commande lancée et ses dernières lignes —
+             sans CI sur le repo, cette section conditionne le merge auto).
           3. Si la cause est EXTERNE (API tierce en panne, secret expiré, quota) : ne code pas,
              commente l'issue avec le diagnostic et l'action manuelle à faire.
           Dans les deux cas, termine par un commentaire de 3 lignes sur l'issue.
@@ -221,6 +223,13 @@ jobs:
             if ! gh pr checks "$pr" --repo ${{ github.repository }} --watch --interval 15; then
               gh pr comment "$pr" --repo ${{ github.repository }} \
                 --body "Checks CI en échec — PR laissée ouverte pour relecture (pas de merge automatique)."
+              exit 0
+            fi
+          else
+            # Pas de CI : exiger la preuve de vérification dans le corps de la PR (v1.4.0).
+            if ! gh pr view "$pr" --repo ${{ github.repository }} --json body --jq .body | grep -q "## Vérification"; then
+              gh pr comment "$pr" --repo ${{ github.repository }} \
+                --body "Pas de CI sur ce repo et pas de section \`## Vérification\` dans le corps de la PR — merge auto suspendu, relecture (ou ajout de la preuve) nécessaire."
               exit 0
             fi
           fi
