@@ -11,7 +11,10 @@ Chaque repo de la flotte ne contient que des **stubs de 5 lignes** qui appellent
 d'ici (`uses: Thibaud888/fleet-kit/.github/workflows/<x>.yml@main`). Améliorer un workflow ici
 = toute la flotte upgradée instantanément. La version du kit installée dans un repo est notée
 dans son fichier `.kit-version` ; l'écart avec [`VERSION`](VERSION) est signalé chaque semaine
-par `claude-ops/scripts/hygiene.ps1` (dérive de flotte).
+par `claude-ops/scripts/hygiene.ps1` (dérive de flotte) et **résorbé automatiquement chaque
+lundi** pour les fichiers possédés par le kit (skills de session + `.kit-version`) par le
+workflow `kit-propagation` de claude-ops (`scripts/kit-propager.mjs`, 0 token). `/equiper`
+reste le geste du premier équipement et des fusions à jugement (CLAUDE.md, allowlist, stubs).
 
 ## Workflows réutilisables (`.github/workflows/`)
 
