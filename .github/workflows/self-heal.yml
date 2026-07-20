@@ -197,7 +197,7 @@ jobs:
           claude -p "$(cat /tmp/prompt-heal.md)" \
             --model "${{ inputs.model }}" \
             --max-turns "${{ inputs.max_turns }}" \
-            --allowedTools "Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(gh run:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(pip:*),Bash(pytest:*),Bash(cat:*),Edit,Write,Read,Glob,Grep"
+            --allowedTools "Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(gh run:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(pip:*),Bash(pytest:*),Bash(cat:*),WebFetch,Edit,Write,Read,Glob,Grep"
 
       # Merge auto : même règle que le dispatch normal (voir dispatch.yml) — CI verte => squash,
       # CI rouge ou `.claude/no-auto-merge` => PR laissée pour relecture. Pas de garde sur
@@ -233,8 +233,15 @@ jobs:
               exit 0
             fi
           fi
-          # Un draft ne peut pas être mergé (GitHub renvoie 405). Si la PR est restée en
-          # brouillon (p.ex. ouverte par une session web), on la passe « ready » avant merge —
-          # sans quoi le merge auto échouerait en silence (continue-on-error).
-          gh pr ready "$pr" --repo ${{ github.repository }} 2>/dev/null || true
+          # Draft non mergeable (405) et `gh pr ready` refusé au `github.token` : même correctif
+          # que dispatch.yml — on rend le blocage visible au lieu de l'avaler sous
+          # `2>/dev/null || true` + `continue-on-error` (run vert, PR non mergée, personne averti).
+          if [ "$(gh pr view "$pr" --repo ${{ github.repository }} --json isDraft --jq .isDraft)" = "true" ]; then
+            if ! gh pr ready "$pr" --repo ${{ github.repository }}; then
+              gh pr comment "$pr" --repo ${{ github.repository }} \
+                --body "PR en brouillon : le \`GITHUB_TOKEN\` d'Actions n'a pas le droit de l'en sortir, et un draft ne peut pas être mergé (405). **Merge auto suspendu** — clique « Ready for review » puis merge."
+              echo "::warning::PR #$pr en brouillon et impossible à passer « ready » sous github.token — merge auto suspendu, geste humain requis."
+              exit 0
+            fi
+          fi
           gh pr merge "$pr" --repo ${{ github.repository }} --squash --delete-branch

@@ -105,7 +105,13 @@ jobs:
                sur le repo, cette section est la SEULE preuve — sans elle, pas de merge auto.
             5. Commente l'issue avec le lien de la PR et un résumé de 3 lignes.
             Si l'issue est ambiguë ou infaisable, ne code pas : commente l'issue en expliquant pourquoi.
-          claude_args: "--model ${{ steps.model.outputs.model }} --max-turns ${{ inputs.max_turns }} --allowedTools 'Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(python3:*),Bash(pip:*),Bash(pip3:*),Bash(pytest:*),Edit,Write,Read,Glob,Grep'"
+          # `WebFetch` (lecture seule) : sans lui, aucune session dispatchée ne peut atteindre une
+          # source web — tout item de scraping était non dispatchable (vécu le 2026-07-17 sur
+          # activites-vallauriennes#16 : arrêt après 30 tours, ~0,62 $, rien produit). Ce n'est PAS
+          # une capacité nouvelle : `Bash(node:*)` autorisait déjà `node -e "fetch(...)"` — l'allowlist
+          # était incohérente, pas fermée. On rend explicite ce qui était atteignable par un détour.
+          # Le garde-fou reste le déclenchement, verrouillé sur `github.actor == 'Thibaud888'`.
+          claude_args: "--model ${{ steps.model.outputs.model }} --max-turns ${{ inputs.max_turns }} --allowedTools 'Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(python3:*),Bash(pip:*),Bash(pip3:*),Bash(pytest:*),WebFetch,Edit,Write,Read,Glob,Grep'"
 
       # Merge auto : dès que la PR ouverte par Claude a une CI verte, on la merge (squash) —
       # plus d'attente de relecture par défaut. Filet de sécurité gardé : CI rouge => PR laissée
@@ -144,10 +150,26 @@ jobs:
               exit 0
             fi
           fi
-          # Un draft ne peut pas être mergé (GitHub renvoie 405). Si la PR est restée en
-          # brouillon (p.ex. ouverte par une session web), on la passe « ready » avant merge —
-          # sans quoi le merge auto échouerait en silence (continue-on-error).
-          gh pr ready "$pr" --repo ${{ github.repository }} 2>/dev/null || true
+          # Un draft ne peut pas être mergé (GitHub renvoie 405). On tente donc de le sortir du
+          # brouillon — mais `markPullRequestReadyForReview` est REFUSÉ au `github.token`
+          # (« Resource not accessible by integration ») : sur une PR draft, cette commande
+          # échoue toujours. Ce `gh pr ready` n'est donc pas le filet de sécurité qu'il paraît.
+          # Avant, son échec était masqué (`2>/dev/null || true`) : le merge partait quand même,
+          # se prenait un 405, et `continue-on-error: true` rendait le run VERT — PR non mergée,
+          # personne averti. Échec silencieux, le motif que ce workflow combat partout ailleurs.
+          # Désormais le blocage est rendu visible (commentaire sur la PR + ::warning::) et le
+          # merge n'est pas tenté pour rien. Correctif complet (PAT `FLEET_GH_TOKEN` cross-repo)
+          # écarté sciemment : il imposerait le secret sur toute la flotte + un bump de kit,
+          # pour un cas qui ne s'est plus produit depuis le 2026-07-15 (les PR de la flotte
+          # naissent prêtes ; seules les sessions Claude Code web / FleetView ouvrent des drafts).
+          if [ "$(gh pr view "$pr" --repo ${{ github.repository }} --json isDraft --jq .isDraft)" = "true" ]; then
+            if ! gh pr ready "$pr" --repo ${{ github.repository }}; then
+              gh pr comment "$pr" --repo ${{ github.repository }} \
+                --body "PR en brouillon : le \`GITHUB_TOKEN\` d'Actions n'a pas le droit de l'en sortir, et un draft ne peut pas être mergé (405). **Merge auto suspendu** — clique « Ready for review » puis merge, ou relance ce workflow une fois la PR prête."
+              echo "::warning::PR #$pr en brouillon et impossible à passer « ready » sous github.token — merge auto suspendu, geste humain requis."
+              exit 0
+            fi
+          fi
           gh pr merge "$pr" --repo ${{ github.repository }} --squash --delete-branch
           # Mergée sous github.token, la PR ne déclenche pas le « Closes #N » de son corps
           # (garde anti-cascade GitHub) : l'issue resterait ouverte — session fantôme pour
@@ -214,5 +236,5 @@ jobs:
           claude_args: >-
             --model ${{ steps.model.outputs.model }}
             --max-turns ${{ inputs.max_turns }}
-            --allowedTools 'Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(python3:*),Bash(pip:*),Bash(pip3:*),Bash(pytest:*),Edit,Write,Read,Glob,Grep'
+            --allowedTools 'Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(python3:*),Bash(pip:*),Bash(pip3:*),Bash(pytest:*),WebFetch,Edit,Write,Read,Glob,Grep'
             --append-system-prompt 'Quand tu as implémenté des changements sur une branche sans pull request associée, ouvre la PR toi-même avec gh pr create (titre et corps en français, avec Closes #<n> quand une issue est liée), puis commente le fil avec le lien. Tu ne peux pas merger ni rebaser (limitation volontaire) : laisse la PR ouverte pour relecture.'

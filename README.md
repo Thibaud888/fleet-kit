@@ -45,8 +45,20 @@ d'attente de relecture humaine par défaut. Trois filets de sécurité, jamais d
 Note sur les **PR en brouillon (draft)** : une PR draft ne peut pas être mergée (GitHub renvoie
 405 sur le bouton « Merger »). Les sessions flotte (`@claude`/label) créent des PR **prêtes** ;
 les sessions Claude Code web / FleetView les ouvrent en **draft** par consigne du harnais.
-`pr-ready.yml` les sort automatiquement du brouillon à l'ouverture (branches `claude/*`), et les
-étapes d'auto-merge appellent `gh pr ready` avant `gh pr merge` par sécurité.
+
+⚠️ **Limite connue, non contournée** (constatée les 2026-07-14/15, réexaminée le 2026-07-20) :
+la mutation `markPullRequestReadyForReview` est **refusée au `GITHUB_TOKEN`** d'Actions
+(« Resource not accessible by integration »). Donc `pr-ready.yml` **échoue** sur une vraie PR
+draft, et l'appel `gh pr ready` des étapes d'auto-merge n'est **pas** le filet de sécurité qu'il
+paraissait : jusqu'au 2026-07-20 son échec était masqué (`2>/dev/null || true`), le merge partait
+quand même, se prenait un 405, et `continue-on-error` rendait le run **vert** — PR non mergée,
+personne averti. Depuis, `dispatch.yml` et `self-heal.yml` **rendent le blocage visible** :
+détection du draft, tentative non masquée, puis commentaire sur la PR + `::warning::` et arrêt
+propre au lieu d'un merge dans le vide. **Une PR draft demande donc un geste humain**
+(« Ready for review » puis merge) — mais on le sait au lieu de le découvrir.
+Correctif complet possible (PAT `FLEET_GH_TOKEN` cross-repo au lieu du `github.token`) écarté
+sciemment : il imposerait le secret sur toute la flotte, un changement de stubs et un bump de
+kit, pour un cas qui ne s'est plus produit depuis le 2026-07-15.
 
 ## Auth Claude dans Actions (secrets à poser par `/equiper`)
 
@@ -61,6 +73,14 @@ Autres secrets : `NTFY_TOPIC` (notifications), `HEALTHCHECK_URL_<CRON>` (pings).
 - Déclenchement Claude restreint à `github.actor == 'Thibaud888'` — **indispensable sur les repos publics**
   (une issue malveillante ne doit jamais déclencher une session ; cf. faille corrigée en claude-code-action v1.0.94).
 - `--max-turns` plafonné partout ; concurrence 1 run Claude par repo.
+- **Sortie réseau des sessions** : `WebFetch` (lecture seule) est autorisé dans `dispatch.yml` et
+  `self-heal.yml` depuis le 2026-07-20 — sans lui, aucune session dispatchée ne pouvait atteindre
+  une source web et **tout item de scraping était non dispatchable** (vécu sur
+  activites-vallauriennes#16 : arrêt après 30 tours, ~0,62 $, rien produit). Ce n'est pas une
+  capacité nouvelle : `Bash(node:*)` autorisait déjà `node -e "fetch(...)"` — l'allowlist était
+  *incohérente*, pas fermée. `gh workflow run` / `gh run` restent **hors** de `dispatch.yml`
+  (surface trop large sur un repo public) ; `self-heal.yml` garde `gh run` pour lire ses propres
+  logs de cron. Le vrai garde-fou reste le déclenchement, verrouillé sur `github.actor`.
 - MAP.md : Haiku uniquement, skip si le push ne touche que `MAP.md`, commit `[skip ci]`.
 - Les gros items partent en session Cloud d'abonnement (via `/dispatch` de claude-ops), pas en API.
 
@@ -80,6 +100,13 @@ projets passent par **`/nouveau-projet`** qui appelle `/equiper`.
 `VERSION` suit semver. Bump **mineur** = nouveaux templates/workflows (dérive signalée, upgrade
 via `/equiper`), bump **majeur** = changement cassant des stubs (les repos doivent être ré-équipés).
 
+> **2026-07-20, sans bump de VERSION** — `WebFetch` ouvert aux sessions + blocage des PR draft
+> rendu visible (`dispatch.yml`, `self-heal.yml`). Effet **immédiat sur toute la flotte** via
+> `@main`. Pas de bump délibérément : aucun template ni skill n'a changé, donc rien à
+> ré-équiper — bumper aurait seulement fait ouvrir à `kit-propagation` une douzaine de PR
+> ne touchant que la ligne `.kit-version`, du bruit pour rien. Règle retenue : **on bumpe quand
+> un repo doit recevoir quelque chose, pas quand un workflow appelé en `@main` change.**
+>
 > Statut : **v1.4.0** (2026-07-19) — merge auto durci : un repo **sans CI** n'auto-merge plus
 > à l'aveugle, la PR doit porter une section `## Vérification` (dispatch.yml + self-heal.yml,
 > effet immédiat sur toute la flotte via `@main` ; templates : CLAUDE.md.tpl, /bilan, /handoff
