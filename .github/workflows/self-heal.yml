@@ -194,10 +194,14 @@ jobs:
              commente l'issue avec le diagnostic et l'action manuelle à faire.
           Dans les deux cas, termine par un commentaire de 3 lignes sur l'issue.
           FIN_PROMPT
+          # On liste `python` ET `python3` (idem `pip`/`pip3`) — un motif `Bash(python:*)`
+          # NE couvre PAS `python3 …`, et Claude tape souvent `python3 scripts/verify.py`, ce qui
+          # retombait sinon sur « This command requires approval » (headless = blocage définitif).
+          # Critique ici : ce self-heal cible les crons, dont les repos cron-python (voir fleet.json).
           claude -p "$(cat /tmp/prompt-heal.md)" \
             --model "${{ inputs.model }}" \
             --max-turns "${{ inputs.max_turns }}" \
-            --allowedTools "Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(gh run:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(pip:*),Bash(pytest:*),Bash(cat:*),WebFetch,Edit,Write,Read,Glob,Grep"
+            --allowedTools "Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(gh run:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(python3:*),Bash(pip:*),Bash(pip3:*),Bash(pytest:*),Bash(cat:*),WebFetch,Edit,Write,Read,Glob,Grep"
 
       # Merge auto : même règle que le dispatch normal (voir dispatch.yml) — CI verte => squash,
       # CI rouge ou `.claude/no-auto-merge` => PR laissée pour relecture. Pas de garde sur
