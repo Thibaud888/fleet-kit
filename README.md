@@ -107,7 +107,13 @@ via `/equiper`), bump **majeur** = changement cassant des stubs (les repos doive
 > ne touchant que la ligne `.kit-version`, du bruit pour rien. Règle retenue : **on bumpe quand
 > un repo doit recevoir quelque chose, pas quand un workflow appelé en `@main` change.**
 >
-> Statut : **v1.5.0** (2026-07-25) — **règle du clair** : ce qui est destiné à Thibaud se lit
+> Statut : **v1.6.0** (2026-07-26) — les trois règles de flotte qui n'avaient pas d'intitulé en
+> gras en tête (« Branche + PR », « 1 session = 1 item = 1 PR », « Écris l'outil, pas l'output »)
+> en ont un : c'est la seule identité stable que `kit-propager` sache reconnaître, donc la seule
+> qui permette de les propager sans créer de doublon. Les repos portant l'ancienne formulation
+> exacte la voient **remplacée** (table `MIGRATIONS` côté claude-ops) ; ceux qui l'ont adaptée
+> sont signalés, jamais devinés. Templates seuls — aucun workflow ne change.
+> v1.5.0 (2026-07-25) — **règle du clair** : ce qui est destiné à Thibaud se lit
 > sans être technicien. Titre d'item de backlog en français courant (le jargon passe après le
 > tiret, dans le contexte et la DoD) ; question de session ouverte par une ligne en clair, avec
 > des options décrites par leur conséquence et non par leur mécanisme, détail technique en repli
