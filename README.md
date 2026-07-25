@@ -107,7 +107,13 @@ via `/equiper`), bump **majeur** = changement cassant des stubs (les repos doive
 > ne touchant que la ligne `.kit-version`, du bruit pour rien. Règle retenue : **on bumpe quand
 > un repo doit recevoir quelque chose, pas quand un workflow appelé en `@main` change.**
 >
-> Statut : **v1.4.0** (2026-07-19) — merge auto durci : un repo **sans CI** n'auto-merge plus
+> Statut : **v1.5.0** (2026-07-25) — **règle du clair** : ce qui est destiné à Thibaud se lit
+> sans être technicien. Titre d'item de backlog en français courant (le jargon passe après le
+> tiret, dans le contexte et la DoD) ; question de session ouverte par une ligne en clair, avec
+> des options décrites par leur conséquence et non par leur mécanisme, détail technique en repli
+> `<details>`. Portée : `dispatch.yml` (effet immédiat via `@main`) + templates CLAUDE.md.tpl,
+> BACKLOG.md, skills `/backlog` et `/bilan` — ces deux skills partent en propagation, d'où le bump.
+> v1.4.0 (2026-07-19) — merge auto durci : un repo **sans CI** n'auto-merge plus
 > à l'aveugle, la PR doit porter une section `## Vérification` (dispatch.yml + self-heal.yml,
 > effet immédiat sur toute la flotte via `@main` ; templates : CLAUDE.md.tpl, /bilan, /handoff
 > — propagés au prochain `/equiper`). Décisions issues de l'audit des consignes

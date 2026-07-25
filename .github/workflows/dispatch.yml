@@ -104,7 +104,19 @@ jobs:
                (la commande de vérification lancée + ses dernières lignes de sortie). Sans CI
                sur le repo, cette section est la SEULE preuve — sans elle, pas de merge auto.
             5. Commente l'issue avec le lien de la PR et un résumé de 3 lignes.
-            Si l'issue est ambiguë ou infaisable, ne code pas : commente l'issue en expliquant pourquoi.
+            6. RÈGLE DU CLAIR — Thibaud te lit souvent depuis son téléphone et n'est pas
+               technicien à ce moment-là. Tout ce qui lui est destiné (résumé de PR, commentaire
+               d'issue, question) commence par du français courant : ce que ça change pour lui,
+               sans nom de fichier ni de fonction, sans sigle ni anglicisme non traduit. Le
+               jargon vient après, ou dans un repli `<details>`.
+               Si tu dois lui poser une question : UNE seule, ouverte par une ligne en clair (le
+               choix vu de son côté), puis un bloc `**Options :**` de 2 à 4 réponses numérotées
+               (une ligne, < 140 caractères) décrites par leur CONSÉQUENCE — ce qu'il verra, ce
+               que ça coûte — et non par leur mécanisme, puis `**Recommandation :** option N —
+               pourquoi`. Détail technique dans un `<details>` sous la question, jamais au-dessus.
+               Il répond par un simple numéro.
+            Si l'issue est ambiguë ou infaisable, ne code pas : commente l'issue en expliquant pourquoi
+            — en clair d'abord (règle 6), le détail technique ensuite.
           # `WebFetch` (lecture seule) : sans lui, aucune session dispatchée ne peut atteindre une
           # source web — tout item de scraping était non dispatchable (vécu le 2026-07-17 sur
           # activites-vallauriennes#16 : arrêt après 30 tours, ~0,62 $, rien produit). Ce n'est PAS
@@ -237,4 +249,4 @@ jobs:
             --model ${{ steps.model.outputs.model }}
             --max-turns ${{ inputs.max_turns }}
             --allowedTools 'Bash(git:*),Bash(gh issue:*),Bash(gh pr:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(python:*),Bash(python3:*),Bash(pip:*),Bash(pip3:*),Bash(pytest:*),WebFetch,Edit,Write,Read,Glob,Grep'
-            --append-system-prompt 'Quand tu as implémenté des changements sur une branche sans pull request associée, ouvre la PR toi-même avec gh pr create (titre et corps en français, avec Closes #<n> quand une issue est liée), puis commente le fil avec le lien. Tu ne peux pas merger ni rebaser (limitation volontaire) : laisse la PR ouverte pour relecture.'
+            --append-system-prompt 'Quand tu as implémenté des changements sur une branche sans pull request associée, ouvre la PR toi-même avec gh pr create (titre et corps en français, avec Closes #<n> quand une issue est liée), puis commente le fil avec le lien. Tu ne peux pas merger ni rebaser (limitation volontaire) : laisse la PR ouverte pour relecture. Règle du clair : Thibaud te lit depuis son téléphone, sans casquette technique à ce moment-là — tout ce qui lui est destiné commence par du français courant (ce que ça change pour lui, sans nom de fichier ni de fonction, sans sigle), le jargon vient après ou dans un repli <details>. Une question = UNE seule, ouverte par une ligne en clair, puis un bloc **Options :** de 2 à 4 réponses numérotées décrites par leur conséquence (pas par leur mécanisme), puis **Recommandation :** option N — pourquoi ; il répond par un numéro.'
