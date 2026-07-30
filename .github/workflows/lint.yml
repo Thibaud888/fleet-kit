@@ -1,0 +1,46 @@
+# Le filet de sécurité du kit.
+#
+# Pourquoi : les 16 repos de la flotte appellent les workflows de ce dépôt en `@main`
+# (`dispatch.yml`, `self-heal.yml`, `map.yml`, `ci-*.yml`, `pages.yml`, `pr-ready.yml`).
+# Une erreur poussée ici se propage donc INSTANTANÉMENT à toute la flotte, et ces
+# fichiers ne se modifient qu'en session locale — personne ne les relit en PR dispatchée.
+# Ce job attrape les erreurs de SYNTAXE avant qu'elles ne partent en production.
+#
+# Volontairement limité : on ne cherche pas à imposer un style, seulement à empêcher
+# qu'un workflow cassé atteigne les 16 repos.
+name: Lint des workflows
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  actionlint:
+    name: actionlint + YAML
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Filet n°1 — le YAML se charge-t-il seulement ? (indépendant d'actionlint,
+      # donc toujours vrai même si l'outil ci-dessous change un jour de comportement)
+      - name: Le YAML de chaque workflow doit se charger
+        run: |
+          python3 - <<'PY'
+          import glob, sys, yaml
+          ko = 0
+          for f in sorted(glob.glob('.github/workflows/*.yml')):
+              try:
+                  yaml.safe_load(open(f, encoding='utf-8'))
+                  print('OK  ', f)
+              except Exception as e:
+                  print('KO  ', f, e); ko += 1
+          sys.exit(1 if ko else 0)
+          PY
+
+      # Filet n°2 — actionlint : expressions `${{ }}`, clés inconnues, `needs`
+      # incohérents, shell douteux… Épinglé sur une version, pas sur `latest`.
+      - name: actionlint
+        uses: docker://rhysd/actionlint:1.7.7
+        with:
+          args: -color -verbose
