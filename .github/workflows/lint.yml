@@ -42,5 +42,11 @@ jobs:
       # incohérents, shell douteux… Épinglé sur une version, pas sur `latest`.
       - name: actionlint
         uses: docker://rhysd/actionlint:1.7.7
+        env:
+          # SC2129 (« Consider using { cmd1; cmd2; } >> file ») est du pur style :
+          # la forme actuelle est plus lisible dans un script de workflow, et la
+          # réécrire toucherait self-heal.yml, donc les 16 repos, pour rien.
+          # C'est la SEULE règle tue — tout le reste doit rester bloquant.
+          SHELLCHECK_OPTS: -e SC2129
         with:
-          args: -color -verbose
+          args: -color

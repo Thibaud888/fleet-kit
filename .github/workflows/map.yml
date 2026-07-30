@@ -56,6 +56,12 @@ jobs:
 
       - name: Garde — la carte doit-elle être régénérée ?
         id: gate
+        # Le seuil passe par l'environnement plutôt que par une interpolation
+        # `${{ }}` au milieu du script : une valeur interpolée est collée dans le
+        # shell avant exécution (donc injectable), et shellcheck ne peut pas la
+        # voir comme un nombre — il refusait la comparaison `-gt` (SC2170).
+        env:
+          SEUIL_LIGNES: ${{ inputs.seuil_lignes }}
         run: |
           decide() { echo "run=$1" >> "$GITHUB_OUTPUT"; echo "Garde MAP : $1 — $2"; }
 
@@ -88,8 +94,8 @@ jobs:
 
           if [ -n "$structurel" ]; then decide true "changement structurel de fichiers"; exit 0; fi
           if [ -n "$cles" ]; then decide true "fichier clé modifié : $(echo "$cles" | head -5 | tr '\n' ' ')"; exit 0; fi
-          if [ "$lignes" -gt "${{ inputs.seuil_lignes }}" ]; then
-            decide true "diff massif ($lignes lignes > ${{ inputs.seuil_lignes }})"; exit 0
+          if [ "$lignes" -gt "$SEUIL_LIGNES" ]; then
+            decide true "diff massif ($lignes lignes > $SEUIL_LIGNES)"; exit 0
           fi
           decide false "diff mineur ($lignes lignes, ni structure ni fichier clé) — 0 token consommé"
 
