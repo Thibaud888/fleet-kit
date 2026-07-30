@@ -90,7 +90,23 @@ Autres secrets : `NTFY_TOPIC` (notifications), `HEALTHCHECK_URL_<CRON>` (pings).
   stubs `map.yml` / `claude.yml` / `self-heal.yml` / `pr-ready.yml`, et les skills de session
   `.claude/skills/` (`/backlog` mono-repo, `/bilan`, `/handoff`, `/reprends`) — versionnées
   avec le repo, donc disponibles y compris en **session Cloud** (téléphone / autre PC).
-- `static/` (GitHub Pages), `service-node/` (Render/serveur), `cron-python/` (script planifié), `lib/`.
+- `static/` (GitHub Pages) : stub `pages.yml`, `scripts/verify.mjs`, `.claude/launch.json`.
+- `service-node/` (Render / serveur) et `cron-python/` (script planifié) : stub `ci.yml` + le
+  `scripts/verify.*` correspondant au langage.
+- `lib/` : **seulement** un stub `ci.yml` (Node par défaut, à remplacer par `ci-python.yml` en
+  Python) — pas de `verify` contrairement aux trois autres, et **aucun repo de la flotte n'est
+  de ce type à ce jour** : le modèle n'a donc jamais été éprouvé en vrai. À compléter le jour où
+  une lib apparaît, plutôt qu'à deviner maintenant.
+
+### Couture fournisseur (invariant de portabilité)
+
+**Toute invocation d'un agent vit dans les workflows réutilisables de ce dépôt** — `dispatch.yml`,
+`self-heal.yml`, `map.yml` — jamais dans les repos qui les appellent. Les stubs installés chez eux
+restent muets sur le fournisseur : ils disent *quoi* déclencher, pas *qui* le fait.
+
+C'est ce qui rend un changement de fournisseur d'agent envisageable sans toucher aux seize repos :
+les points de couplage sont réunis dans une poignée de fichiers, ici. Corollaire à respecter — tout
+nouveau workflow qui invoque un agent s'écrit **dans ce dépôt**, pas dans un repo de la flotte.
 
 Installés/rafraîchis par la skill **`/equiper <repo>`** (sans écraser l'existant) ; les nouveaux
 projets passent par **`/nouveau-projet`** qui appelle `/equiper`.
