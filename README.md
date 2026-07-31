@@ -98,18 +98,21 @@ Autres secrets : `NTFY_TOPIC` (notifications), `HEALTHCHECK_URL_<CRON>` (pings).
   de ce type à ce jour** : le modèle n'a donc jamais été éprouvé en vrai. À compléter le jour où
   une lib apparaît, plutôt qu'à deviner maintenant.
 
-### Couture fournisseur (invariant de portabilité)
+Installés/rafraîchis par la skill **`/equiper <repo>`** (sans écraser l'existant) ; les nouveaux
+projets passent par **`/nouveau-projet`** qui appelle `/equiper`.
+
+## Couture fournisseur (invariant de portabilité)
 
 **Toute invocation d'un agent vit dans les workflows réutilisables de ce dépôt** — `dispatch.yml`,
 `self-heal.yml`, `map.yml` — jamais dans les repos qui les appellent. Les stubs installés chez eux
-restent muets sur le fournisseur : ils disent *quoi* déclencher, pas *qui* le fait.
+restent muets sur le fournisseur : ils disent *quoi* déclencher, pas *qui* le fait. Seule autre
+adresse autorisée : les crons propres au repo de pilotage, qui n'est pas un repo de la flotte.
 
-C'est ce qui rend un changement de fournisseur d'agent envisageable sans toucher aux seize repos :
+C'est ce qui rend un changement de fournisseur d'agent envisageable sans toucher à toute la flotte :
 les points de couplage sont réunis dans une poignée de fichiers, ici. Corollaire à respecter — tout
 nouveau workflow qui invoque un agent s'écrit **dans ce dépôt**, pas dans un repo de la flotte.
-
-Installés/rafraîchis par la skill **`/equiper <repo>`** (sans écraser l'existant) ; les nouveaux
-projets passent par **`/nouveau-projet`** qui appelle `/equiper`.
+Le jour où l'invariant est rompu, la bascule cesse d'être un chantier de quelques jours pour
+devenir une revue de seize dépôts.
 
 ## Versionnage
 
