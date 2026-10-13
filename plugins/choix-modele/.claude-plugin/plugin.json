@@ -1,0 +1,7 @@
+{
+  "name": "choix-modele",
+  "version": "0.1.0",
+  "description": "Au premier message d'une session, recommande le modèle et l'effort adaptés à la tâche ; ne pose la question que s'il faut changer.",
+  "author": { "name": "Thibaud888" },
+  "types": "./types/index.d.ts"
+}

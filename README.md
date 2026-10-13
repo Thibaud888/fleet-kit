@@ -86,7 +86,8 @@ Autres secrets : `NTFY_TOPIC` (notifications), `HEALTHCHECK_URL_<CRON>` (pings).
 
 ## Templates (`templates/`)
 
-- `common/` : CLAUDE.md (modèle), BACKLOG.md, `.claude/settings.json` (allowlist), dependabot,
+- `common/` : CLAUDE.md (modèle), BACKLOG.md, `.claude/settings.json` (allowlist + hook
+  SessionStart des mods), `.claude/hooks/mods-cloud.mjs`, dependabot,
   stubs `map.yml` / `claude.yml` / `self-heal.yml` / `pr-ready.yml`, et les skills de session
   `.claude/skills/` (`/backlog` mono-repo, `/bilan`, `/handoff`, `/reprends`) — versionnées
   avec le repo, donc disponibles y compris en **session Cloud** (téléphone / autre PC).
@@ -100,6 +101,29 @@ Autres secrets : `NTFY_TOPIC` (notifications), `HEALTHCHECK_URL_<CRON>` (pings).
 
 Installés/rafraîchis par la skill **`/equiper <repo>`** (sans écraser l'existant) ; les nouveaux
 projets passent par **`/nouveau-projet`** qui appelle `/equiper`.
+
+## Mods (`plugins/`) — depuis v1.7.0
+
+Un **mod** change le comportement de Claude Code lui-même (hooks TypeScript chargés comme
+plugin). Source unique ici, dans `plugins/<nom>/` (code, tests, README) ; `kit-propager` en pose
+une copie dans `.claude/skills/<nom>/` de chaque repo de la flotte.
+
+| Mod | Ce qu'il fait |
+|---|---|
+| [`choix-modele`](plugins/choix-modele/README.md) | Au premier message d'une session, recommande le modèle et l'effort adaptés à la tâche ; pose la question seulement s'il faut changer. |
+
+**Le piège du Cloud** (constaté le 2026-10-13) : une session Cloud **ignore** les plugins d'un
+dépôt (dossier jamais « approuvé ») et ceux qu'un `.claude/settings.json` déclare par
+marketplace. Elle charge en revanche `~/.claude/skills/<nom>/`, et ce **après** les hooks
+SessionStart. D'où [`templates/common/.claude/hooks/mods-cloud.mjs`](templates/common/.claude/hooks/mods-cloud.mjs),
+appelé au démarrage : si `CLAUDE_CODE_REMOTE=true`, il recopie les mods du dépôt dans
+`~/.claude/skills/`. En local il ne fait rien, le dépôt est approuvé et le mod s'y charge tel quel.
+Node plutôt que bash : le même hook tourne sous Windows.
+
+Hors flotte (un dossier local quelconque), le dépôt sert aussi de marketplace :
+`claude plugin marketplace add Thibaud888/fleet-kit` puis `claude plugin install choix-modele@fleet-kit`.
+
+Vérifier un mod : `claude plugin validate plugins/<nom>` et `claude plugin test plugins/<nom>`.
 
 ## Couture fournisseur (invariant de portabilité)
 
@@ -126,7 +150,12 @@ via `/equiper`), bump **majeur** = changement cassant des stubs (les repos doive
 > ne touchant que la ligne `.kit-version`, du bruit pour rien. Règle retenue : **on bumpe quand
 > un repo doit recevoir quelque chose, pas quand un workflow appelé en `@main` change.**
 >
-> Statut : **v1.6.0** (2026-07-26) — les trois règles de flotte qui n'avaient pas d'intitulé en
+> Statut : **v1.7.0** (2026-10-13) — **mods** : premier mod de flotte, `choix-modele`
+> (`plugins/`), posé dans `.claude/skills/choix-modele/` de chaque repo par `kit-propager`, avec
+> le hook `.claude/hooks/mods-cloud.mjs` et son entrée SessionStart ajoutée à
+> `.claude/settings.json` (seul ajout jamais fait à ce fichier). Marketplace
+> `.claude-plugin/marketplace.json` pour l'installer hors flotte.
+> v1.6.0 (2026-07-26) — les trois règles de flotte qui n'avaient pas d'intitulé en
 > gras en tête (« Branche + PR », « 1 session = 1 item = 1 PR », « Écris l'outil, pas l'output »)
 > en ont un : c'est la seule identité stable que `kit-propager` sache reconnaître, donc la seule
 > qui permette de les propager sans créer de doublon. Les repos portant l'ancienne formulation

@@ -1,0 +1,12 @@
+{
+  "name": "fleet-kit",
+  "description": "Mods de la flotte de Thibaud888 (Claude Code).",
+  "owner": { "name": "Thibaud888" },
+  "plugins": [
+    {
+      "name": "choix-modele",
+      "source": "./plugins/choix-modele",
+      "description": "Au premier message d'une session, recommande le modèle et l'effort adaptés à la tâche ; ne pose la question que s'il faut changer."
+    }
+  ]
+}
