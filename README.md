@@ -120,8 +120,12 @@ appelé au démarrage : si `CLAUDE_CODE_REMOTE=true`, il recopie les mods du dé
 `~/.claude/skills/`. En local il ne fait rien, le dépôt est approuvé et le mod s'y charge tel quel.
 Node plutôt que bash : le même hook tourne sous Windows.
 
-Hors flotte (un dossier local quelconque), le dépôt sert aussi de marketplace :
-`claude plugin marketplace add Thibaud888/fleet-kit` puis `claude plugin install choix-modele@fleet-kit`.
+**Installation partout, sans passer par les dépôts** (recommandé, depuis le 2026-10-14) :
+- **Cloud** : script d'installation de l'environnement →
+  `rm -rf /opt/fleet-kit; git clone -q --depth 1 https://github.com/Thibaud888/fleet-kit /opt/fleet-kit && bash /opt/fleet-kit/scripts/installer-mods.sh || true`
+  ([`scripts/installer-mods.sh`](scripts/installer-mods.sh) copie chaque `plugins/<nom>/` dans `~/.claude/skills/`, avant le lancement de Claude Code ; cache ≈ 7 jours).
+- **Local** : ce dépôt est aussi une marketplace →
+  `claude plugin marketplace add Thibaud888/fleet-kit` puis `claude plugin install choix-modele@fleet-kit`.
 
 Vérifier un mod : `claude plugin validate plugins/<nom>` et `claude plugin test plugins/<nom>`.
 
