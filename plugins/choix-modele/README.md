@@ -16,15 +16,22 @@ session garde son réglage et part ; une réponse tardive s'applique encore à l
 
 ## Où il tourne
 
-| Où | Comment il arrive | Geste |
-|---|---|---|
-| Session **Cloud** sur un repo de la flotte | copie dans `.claude/skills/choix-modele/`, recopiée au démarrage dans `~/.claude/skills/` par un hook du repo (`CLAUDE_CODE_REMOTE=true` seulement) | aucun (propagé par le kit) |
-| Session **locale** sur un repo de la flotte | la même copie, chargée comme plugin du dépôt (dossier approuvé) | aucun |
-| Session locale **ailleurs** | marketplace de ce dépôt | `claude plugin marketplace add Thibaud888/fleet-kit` puis `claude plugin install choix-modele@fleet-kit` |
+Deux installations uniques couvrent tout, quel que soit le dépôt :
 
-Pourquoi ce détour en Cloud : une session Cloud **ignore** les plugins d'un dépôt (dossier
-jamais « approuvé ») et ceux déclarés par marketplace dans `.claude/settings.json` — constaté
-le 2026-10-13. Le dossier personnel `~/.claude/skills/`, lui, n'a pas cette restriction.
+| Où | Installation (une seule fois) |
+|---|---|
+| **Sessions Cloud** (tous les dépôts) | Script d'installation de l'environnement (claude.ai → menu de l'environnement → *Edit* → *Setup script*) : `rm -rf /opt/fleet-kit; git clone -q --depth 1 https://github.com/Thibaud888/fleet-kit /opt/fleet-kit && bash /opt/fleet-kit/scripts/installer-mods.sh \|\| true` |
+| **Sessions locales** (tous les dossiers) | `claude plugin marketplace add Thibaud888/fleet-kit` puis `claude plugin install choix-modele@fleet-kit` |
+
+Mises à jour : en Cloud, le résultat du script est gardé en cache environ 7 jours, et une
+nouvelle version arrive à la reconstruction suivante. En local, `claude plugin update
+choix-modele@fleet-kit`, ou la mise à jour automatique activée dans `/plugin` → *Marketplaces*.
+
+En complément, `kit-propager` pose une copie dans `.claude/skills/choix-modele/` des dépôts
+équipés du kit, avec le hook `.claude/hooks/mods-cloud.mjs`. Ce hook la recopie au démarrage
+dans `~/.claude/skills/` en Cloud, car une session Cloud **ignore** les plugins d'un dépôt
+(dossier jamais « approuvé »), constaté le 2026-10-13. Avec les deux installations ci-dessus,
+cette copie n'est plus indispensable.
 
 ## Comment il marche
 
