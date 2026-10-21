@@ -54,6 +54,17 @@ const DELAI_MS = 90_000
 const reglage = (model: string, effort: Niveau | number | undefined): Reglage =>
   effort === undefined ? { model } : { model, effort }
 
+// Une réponse de l'assistant déjà dans la conversation : on n'est plus au début. Arrive quand
+// le mod s'installe ou se recharge en cours de session, ou que la session est reprise (son
+// état est alors vide alors que le travail est déjà engagé).
+const dejaCommence = async ($: EngineInterface): Promise<boolean> => {
+  try {
+    return (await $.session.messages()).some(m => m.role === 'assistant')
+  } catch {
+    return false
+  }
+}
+
 const nomDepot = async ($: EngineInterface): Promise<string> => {
   try {
     return (await $.session.cwd()).split('/').filter(Boolean).pop() ?? '?'
@@ -149,10 +160,11 @@ const trancher = async ($: EngineInterface, actuel: Reglage, signal: AbortSignal
 export const register: Register = on => {
   on('prompt.submit', async ($, e, next) => {
     // Seul le tout premier message compte : une session ouverte par une consigne
-    // automatique ne pose pas la question plus tard, en plein travail.
+    // automatique, ou déjà en cours quand le mod arrive, ne pose pas la question plus tard,
+    // en plein travail.
     const { value: etat } = await $.state.get(ETAT)
     if (etat === undefined) {
-      if (AUTOMATIQUES.has(e.origin.kind)) {
+      if (AUTOMATIQUES.has(e.origin.kind) || (await dejaCommence($))) {
         await $.state.set(ETAT, 'tranche')
       } else {
         await $.state.set(TACHE, e.text)
