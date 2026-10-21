@@ -9,7 +9,7 @@ type Vu = { model: string; effort?: unknown; agentId?: string }
 // l'API (turn.step), qui note avec quel modèle et quel effort chaque requête part.
 const monde = (
   on: On,
-  { avis, reponse }: { avis: object | string; reponse?: string | 'jamais' },
+  { avis, reponse, enCours }: { avis: object | string; reponse?: string | 'jamais'; enCours?: boolean },
 ) => {
   const vus: Vu[] = []
   const questions: string[] = []
@@ -17,6 +17,15 @@ const monde = (
   const lignes: string[] = []
   on('prompt.submit', ($, e) => ({ text: e.text }))
   on('session.cwd', () => ({ value: '/home/user/Recherche-Emploi' }))
+  // enCours : la conversation a déjà un échange (session reprise, mod arrivé en route).
+  on('session.messages', () => ({
+    value: enCours
+      ? [
+          { role: 'user', text: 'premier message', toolUses: [] },
+          { role: 'assistant', text: 'réponse', toolUses: [] },
+        ]
+      : [],
+  }))
   on('ui.log', ($, e) => {
     lignes.push(e.text)
     return { value: undefined }
@@ -114,6 +123,15 @@ describe('choix-modele', () => {
     await etape($, { model: 'claude-opus-5-5', effort: 'high' })
     expect(m.juges.length).toBe(1)
     expect(m.questions.length).toBe(1)
+  })
+
+  test('session déjà en cours quand le mod arrive (reprise, rechargement) : pas de jugement', async ($, on) => {
+    const m = monde(on, { avis: SIMPLE, reponse: 'Passer à Haiku · effort bas', enCours: true })
+    await envoyer($, 'corrige la faute de frappe')
+    await etape($, { model: 'claude-opus-5-5', effort: 'xhigh' })
+    expect(m.juges).toEqual([])
+    expect(m.questions).toEqual([])
+    expect(m.vus).toEqual([{ model: 'claude-opus-5-5', effort: 'xhigh' }])
   })
 
   test('message d’une routine : pas de jugement', async ($, on) => {
